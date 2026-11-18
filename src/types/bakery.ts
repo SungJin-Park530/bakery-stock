@@ -13,6 +13,7 @@ export interface ProductItem {
 export interface StoreData {
   updatedAt: string;     // ISO 타임스탬프 (예: 2026-11-18T15:30:00.000Z)
   notice: string;        // 상단 한 줄 공지 (예: "소금빵 2차는 오후 3시에 나옵니다!")
+  isOpen?: boolean;      // 영업 중 여부 (미설정 시 영업 중으로 처리)
   categories?: string[]; // (선택) 카테고리 탭 순서 관리용 (예: ["전체", "빵", "쿠키", "음료"])
   items: ProductItem[];  // 전체 상품 목록 배열
 }

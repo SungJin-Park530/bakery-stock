@@ -2,12 +2,12 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { onSnapshot, setDoc } from 'firebase/firestore';
 import { MENU_DOC_REF } from '../lib/firebase';
 import type { ProductItem, StoreData } from '../types/bakery';
-import { uploadProductImage } from '../lib/imageUpload';
 
 function createDefaultStoreData(): StoreData {
   return {
     updatedAt: new Date().toISOString(),
     notice: '',
+    isOpen: true,
     items: [],
   };
 }
@@ -15,6 +15,7 @@ function createDefaultStoreData(): StoreData {
 function normalizeStoreData(data: StoreData): StoreData {
   return {
     ...data,
+    isOpen: data.isOpen ?? true,
     items: data.items.map((item) => ({
       ...item,
       isSoldOut: item.isSoldOut ?? false,
@@ -25,6 +26,7 @@ function normalizeStoreData(data: StoreData): StoreData {
 function hasSameEditableData(left: StoreData, right: StoreData) {
   return (
     left.notice === right.notice &&
+    (left.isOpen ?? true) === (right.isOpen ?? true) &&
     JSON.stringify(left.categories ?? []) === JSON.stringify(right.categories ?? []) &&
     JSON.stringify(left.items) === JSON.stringify(right.items)
   );
@@ -34,6 +36,7 @@ export function useStoreData() {
   const [serverData, setServerData] = useState<StoreData>(createDefaultStoreData);
   const [draftData, setDraftData] = useState<StoreData>(serverData);
   const [hasChanges, setHasChanges] = useState(false);
+  const [hasServerUpdate, setHasServerUpdate] = useState(false);
   const [pendingImages, setPendingImages] = useState<Record<string, File>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -42,6 +45,7 @@ export function useStoreData() {
   const draftDataRef = useRef(draftData);
   const pendingImagesRef = useRef(pendingImages);
   const hasChangesRef = useRef(false);
+  const hasServerUpdateRef = useRef(false);
   const draftRevisionRef = useRef(0);
   const isSavingRef = useRef(false);
 
@@ -70,6 +74,10 @@ export function useStoreData() {
           const nextServerData = snapshot.exists()
             ? normalizeStoreData(snapshot.data() as StoreData)
             : createDefaultStoreData();
+          const previousServerData = serverDataRef.current;
+          const serverDataChanged =
+            previousServerData.updatedAt !== nextServerData.updatedAt ||
+            !hasSameEditableData(previousServerData, nextServerData);
 
           serverDataRef.current = nextServerData;
           setServerData(nextServerData);
@@ -77,12 +85,9 @@ export function useStoreData() {
           if (!hasChangesRef.current) {
             draftDataRef.current = nextServerData;
             setDraftData(nextServerData);
-          } else {
-            const changed =
-              Object.keys(pendingImagesRef.current).length > 0 ||
-              !hasSameEditableData(nextServerData, draftDataRef.current);
-            hasChangesRef.current = changed;
-            setHasChanges(changed);
+          } else if (serverDataChanged) {
+            hasServerUpdateRef.current = true;
+            setHasServerUpdate(true);
           }
           setLoading(false);
           setError(null);
@@ -139,6 +144,13 @@ export function useStoreData() {
     commitDraft({ ...draftDataRef.current, notice });
   }, [commitDraft]);
 
+  const toggleDraftOpen = useCallback(() => {
+    commitDraft({
+      ...draftDataRef.current,
+      isOpen: !(draftDataRef.current.isOpen ?? true),
+    });
+  }, [commitDraft]);
+
   const updateDraftItem = useCallback((item: ProductItem, imageFile?: File) => {
     const items = draftDataRef.current.items;
     const existingIndex = items.findIndex((currentItem) => currentItem.id === item.id);
@@ -156,6 +168,18 @@ export function useStoreData() {
     commitDraft({ ...draftDataRef.current, items: nextItems }, nextPendingImages);
   }, [commitDraft]);
 
+  const removeDraftItem = useCallback((id: string) => {
+    const nextPendingImages = { ...pendingImagesRef.current };
+    delete nextPendingImages[id];
+    commitDraft(
+      {
+        ...draftDataRef.current,
+        items: draftDataRef.current.items.filter((item) => item.id !== id),
+      },
+      nextPendingImages
+    );
+  }, [commitDraft]);
+
   const saveChanges = useCallback(async () => {
     if (isSavingRef.current) return;
 
@@ -166,12 +190,18 @@ export function useStoreData() {
     const revisionAtSave = draftRevisionRef.current;
 
     try {
-      const uploadedImages = await Promise.all(
-        Object.entries(pendingImagesSnapshot).map(async ([itemId, file]) => [
-          itemId,
-          await uploadProductImage(file),
-        ] as const)
-      );
+      const pendingImageEntries = Object.entries(pendingImagesSnapshot);
+      const uploadedImages = pendingImageEntries.length > 0
+        ? await (async () => {
+            const { uploadProductImage } = await import('../lib/imageUpload');
+            return Promise.all(
+              pendingImageEntries.map(async ([itemId, file]) => [
+                itemId,
+                await uploadProductImage(file),
+              ] as const)
+            );
+          })()
+        : [];
       const uploadedImageUrls = new Map(uploadedImages);
       const payload: StoreData = {
         ...draftSnapshot,
@@ -185,6 +215,8 @@ export function useStoreData() {
       await setDoc(MENU_DOC_REF, payload);
       serverDataRef.current = payload;
       setServerData(payload);
+      hasServerUpdateRef.current = false;
+      setHasServerUpdate(false);
 
       if (draftRevisionRef.current === revisionAtSave) {
         draftDataRef.current = payload;
@@ -209,10 +241,12 @@ export function useStoreData() {
     draftDataRef.current = currentServerData;
     pendingImagesRef.current = {};
     hasChangesRef.current = false;
+    hasServerUpdateRef.current = false;
     draftRevisionRef.current += 1;
     setDraftData(currentServerData);
     setPendingImages({});
     setHasChanges(false);
+    setHasServerUpdate(false);
   }, []);
 
   const updateStock = useCallback((id: string, delta: number, absoluteValue?: number) => {
@@ -229,16 +263,20 @@ export function useStoreData() {
     serverData,
     draftData,
     hasChanges,
+    hasServerUpdate,
     pendingImages,
     isSaving,
     loading,
     error,
     updateDraftStock,
     toggleDraftSoldOut,
+    toggleDraftOpen,
     updateDraftNotice,
     updateDraftItem,
+    removeDraftItem,
     saveChanges,
     discardChanges,
+    loadLatestServerData: discardChanges,
     storeData: draftData,
     updateStock,
     updateNotice,
