@@ -4,6 +4,7 @@ export interface ProductItem {
   name: string;        // 상품명
   price: number;       // 가격 (원)
   stock: number;       // 현재 남은 수량 (0이면 품절)
+  isSoldOut: boolean;  // 재고와 독립적인 품절 표시 상태
   imageUrl: string;    // Cloudinary WebP 이미지 URL
   isVisible: boolean;  // 오늘 판매 목록 노출 여부 (시즌오프/휴무 메뉴 숨김용)
   order: number;       // 진열 순서
