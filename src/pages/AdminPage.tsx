@@ -1,16 +1,22 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { Check, Eye, EyeOff, ImagePlus, LoaderCircle, Save, Search, Trash2, X } from 'lucide-react';
+import { Check, Eye, EyeOff, LoaderCircle, Menu, Save, Search, Trash2, X } from 'lucide-react';
 import { STORE_CONFIG } from '../config/storeConfig';
+import defaultProductImage from '../assets/defaultimg.webp';
 import { auth } from '../lib/firebaseAuth';
 import { useStoreData } from '../hooks/useStoreData';
-import type { ProductItem } from '../types/bakery';
+import type { ProductItem, StoreData } from '../types/bakery';
 
 type AdminTab = 'stock' | 'notice' | 'register';
 type ToastState = { message: string; type: 'success' | 'error' } | null;
 type ProductFormValues = Omit<ProductItem, 'id' | 'imageUrl' | 'order'>;
 
 const NEW_CATEGORY_OPTION = '__new_category__';
+const DRAFT_MODE_STORAGE_KEY = 'bakery-stock-admin-draft-mode';
+
+function createProductId() {
+  return `item_${crypto.randomUUID()}`;
+}
 
 interface ProductDraftFormProps {
   categories: string[];
@@ -81,8 +87,7 @@ function ProductDraftForm({
       !name.trim() ||
       !resolvedCategory ||
       !Number.isSafeInteger(numericPrice) || numericPrice < 0 ||
-      !Number.isSafeInteger(numericStock) || numericStock < 0 ||
-      (!initialItem && !selectedFile)
+      !Number.isSafeInteger(numericStock) || numericStock < 0
     ) return;
 
     if (previewRef.current) transferredPreviewRef.current = true;
@@ -175,6 +180,25 @@ function ProductDraftForm({
         </div>
       </div>
 
+      <div>
+        <label htmlFor={`${idPrefix}-image`} className="mb-1 block text-sm font-semibold text-stone-800">
+          사진 {initialItem ? '(선택)' : ''}
+        </label>
+        <input
+          id={`${idPrefix}-image`}
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          className="min-h-12 w-full rounded-lg border border-border-subtle bg-surface-card p-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-surface-muted file:px-3 file:py-2 file:text-brand-primary focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
+        />
+        <img
+          src={previewUrl || defaultProductImage}
+          alt="상품 사진 미리보기"
+          className="mt-3 h-40 w-full rounded-lg bg-surface-muted object-cover"
+        />
+        {selectedFile && <p className="mt-1 truncate text-xs text-stone-500">{selectedFile.name} · 저장 시 업로드</p>}
+      </div>
+
       <div className="space-y-2 rounded-lg border border-border-subtle bg-surface-muted p-3">
         <label className="flex min-h-11 items-center justify-between gap-3 text-sm font-medium text-stone-800">
           손님 화면에 노출
@@ -194,30 +218,6 @@ function ProductDraftForm({
             className="h-5 w-5 accent-status-danger"
           />
         </label>
-      </div>
-
-      <div>
-        <label htmlFor={`${idPrefix}-image`} className="mb-1 block text-sm font-semibold text-stone-800">
-          사진 {initialItem ? '(선택)' : ''}
-        </label>
-        <input
-          id={`${idPrefix}-image`}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={handleFileChange}
-          required={!initialItem}
-          className="min-h-12 w-full rounded-lg border border-border-subtle bg-surface-card p-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-surface-muted file:px-3 file:py-2 file:text-brand-primary focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
-        />
-        {previewUrl ? (
-          <img src={previewUrl} alt="상품 사진 미리보기" className="mt-3 h-40 w-full rounded-lg object-cover" />
-        ) : (
-          <div className="mt-3 flex h-32 items-center justify-center rounded-lg bg-surface-muted text-sm text-stone-500">
-            <ImagePlus size={18} className="mr-2" aria-hidden="true" />
-            사진 미리보기
-          </div>
-        )}
-        {selectedFile && <p className="mt-1 truncate text-xs text-stone-500">{selectedFile.name} · 저장 시 업로드</p>}
       </div>
 
       <div className="flex gap-2">
@@ -257,26 +257,40 @@ export default function AdminPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [activeTab, setActiveTab] = useState<AdminTab>('stock');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isDraftMode, setIsDraftMode] = useState(() => {
+    try {
+      return window.localStorage.getItem(DRAFT_MODE_STORAGE_KEY) !== 'false';
+    } catch {
+      return true;
+    }
+  });
   const [selectedStockCategory, setSelectedStockCategory] = useState('전체');
   const [stockSearchQuery, setStockSearchQuery] = useState('');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [registerFormVersion, setRegisterFormVersion] = useState(0);
   const [isEditingNotice, setIsEditingNotice] = useState(false);
   const [noticeDraft, setNoticeDraft] = useState('');
+  const [closedTitleDraft, setClosedTitleDraft] = useState('');
+  const [kakaoChatUrlDraft, setKakaoChatUrlDraft] = useState('');
+  const [orderGuideTextDraft, setOrderGuideTextDraft] = useState('');
   const [toast, setToast] = useState<ToastState>(null);
   const previewUrlsRef = useRef<Record<string, string>>({});
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const menuPopupRef = useRef<HTMLElement>(null);
+  const immediateMutationPromiseRef = useRef<Promise<void>>(Promise.resolve());
   const {
     draftData,
     hasChanges,
     hasServerUpdate,
     isSaving,
-    toggleDraftOpen,
     updateDraftStock,
     toggleDraftSoldOut,
-    updateDraftNotice,
+    updateDraftSettings,
     updateDraftItem,
     removeDraftItem,
     saveChanges,
+    updateStoreImmediately,
     discardChanges,
     loadLatestServerData,
   } = useStoreData();
@@ -286,6 +300,27 @@ export default function AdminPage() {
     const unsubscribe = onAuthStateChanged(auth, setUser);
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!isMenuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (menuButtonRef.current?.contains(target) || menuPopupRef.current?.contains(target)) return;
+      setIsMenuOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsMenuOpen(false);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isMenuOpen]);
 
   useEffect(() => {
     if (!toast) return;
@@ -320,18 +355,29 @@ export default function AdminPage() {
 
   const handleNoticeApply = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    updateDraftNotice(noticeDraft);
+    updateDraftSettings({
+      notice: noticeDraft,
+      closedTitle: closedTitleDraft,
+      kakaoChatUrl: kakaoChatUrlDraft.trim(),
+      orderGuideText: orderGuideTextDraft,
+    });
     setIsEditingNotice(false);
     setToast({ message: '공지사항을 초안에 반영했습니다.', type: 'success' });
   };
 
   const handleNoticeEdit = () => {
     setNoticeDraft(draftData.notice);
+    setClosedTitleDraft(draftData.closedTitle);
+    setKakaoChatUrlDraft(draftData.kakaoChatUrl);
+    setOrderGuideTextDraft(draftData.orderGuideText);
     setIsEditingNotice(true);
   };
 
   const handleNoticeCancel = () => {
     setNoticeDraft(draftData.notice);
+    setClosedTitleDraft(draftData.closedTitle);
+    setKakaoChatUrlDraft(draftData.kakaoChatUrl);
+    setOrderGuideTextDraft(draftData.orderGuideText);
     setIsEditingNotice(false);
   };
 
@@ -346,9 +392,80 @@ export default function AdminPage() {
       Object.values(previewUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
       previewUrlsRef.current = {};
       setToast({ message: '변경사항을 저장했습니다.', type: 'success' });
+      return true;
     } catch {
       setToast({ message: '저장에 실패했습니다. 네트워크와 이미지 업로드 설정을 확인해주세요.', type: 'error' });
+      return false;
     }
+  };
+
+  const runImmediateMutation = (
+    update: (current: StoreData, uploadedImageUrls: Map<string, string>) => StoreData,
+    imageFiles: Record<string, File> = {}
+  ) => {
+    const operation = immediateMutationPromiseRef.current.then(async () => {
+      try {
+        await updateStoreImmediately(update, imageFiles);
+        return true;
+      } catch {
+        setToast({ message: '변경사항을 저장하지 못했습니다. 네트워크 연결을 확인하고 다시 시도해주세요.', type: 'error' });
+        return false;
+      }
+    });
+    immediateMutationPromiseRef.current = operation.then(() => undefined);
+    return operation;
+  };
+
+  const handleDraftModeToggle = async () => {
+    const persistMode = (enabled: boolean) => {
+      try {
+        window.localStorage.setItem(DRAFT_MODE_STORAGE_KEY, String(enabled));
+      } catch {
+        setToast({ message: '초안 모드 설정을 이 기기에 저장하지 못했습니다.', type: 'error' });
+      }
+      setIsDraftMode(enabled);
+    };
+
+    if (!isDraftMode) {
+      persistMode(true);
+      return;
+    }
+    if (hasChanges) {
+      if (!window.confirm('초안 변경사항을 저장한 뒤 즉시 저장 모드로 전환할까요?')) return;
+      if (!await handleSaveChanges()) return;
+    }
+    persistMode(false);
+  };
+
+  const handleStockChange = (itemId: string, stock: number) => {
+    if (isDraftMode) {
+      updateDraftStock(itemId, stock);
+      return;
+    }
+    void runImmediateMutation((current) => ({
+      ...current,
+      items: current.items.map((item) => item.id === itemId ? { ...item, stock: Math.max(0, stock) } : item),
+    }));
+  };
+
+  const handleBusinessStatusToggle = () => {
+    const nextIsOpen = !isOpen;
+    const prompt = nextIsOpen
+      ? '매장을 영업 중으로 변경할까요?'
+      : '매장을 영업 종료·휴무 상태로 변경할까요?';
+    if (!window.confirm(prompt)) return;
+
+    void runImmediateMutation((current) => ({
+      ...current,
+      isOpen: nextIsOpen,
+    }));
+  };
+
+  const releasePreviewUrl = (itemId: string) => {
+    const previewUrl = previewUrlsRef.current[itemId];
+    if (!previewUrl) return;
+    URL.revokeObjectURL(previewUrl);
+    delete previewUrlsRef.current[itemId];
   };
 
   const handleDiscardChanges = () => {
@@ -359,6 +476,9 @@ export default function AdminPage() {
     setSelectedItemId(null);
     setRegisterFormVersion((version) => version + 1);
     setNoticeDraft(draftData.notice);
+    setClosedTitleDraft(draftData.closedTitle);
+    setKakaoChatUrlDraft(draftData.kakaoChatUrl);
+    setOrderGuideTextDraft(draftData.orderGuideText);
     setIsEditingNotice(false);
     setToast({ message: '저장하지 않은 변경사항을 취소했습니다.', type: 'success' });
   };
@@ -371,6 +491,9 @@ export default function AdminPage() {
     setSelectedItemId(null);
     setRegisterFormVersion((version) => version + 1);
     setNoticeDraft(draftData.notice);
+    setClosedTitleDraft(draftData.closedTitle);
+    setKakaoChatUrlDraft(draftData.kakaoChatUrl);
+    setOrderGuideTextDraft(draftData.orderGuideText);
     setIsEditingNotice(false);
     setToast({ message: '최신 서버 데이터를 불러왔습니다.', type: 'success' });
   };
@@ -383,20 +506,37 @@ export default function AdminPage() {
   };
 
   const handleRegisterProduct = (values: ProductFormValues, imageFile?: File, previewUrl?: string) => {
-    const itemId = `item_${Date.now()}`;
+    const itemId = createProductId();
     const newItem: ProductItem = {
       ...values,
       id: itemId,
       imageUrl: previewUrl ?? '',
       order: draftData.items.reduce((maxOrder, item) => Math.max(maxOrder, item.order), -1) + 1,
     };
-    updateDraftItem(newItem, imageFile);
+    if (isDraftMode) {
+      updateDraftItem(newItem, imageFile);
+      keepPreviewUrl(itemId, previewUrl);
+      setRegisterFormVersion((version) => version + 1);
+      setActiveTab('stock');
+      setToast({
+        message: '초안에 새 상품이 추가되었습니다. 하단 저장 버튼을 눌러 반영하세요.',
+        type: 'success',
+      });
+      return;
+    }
+
     keepPreviewUrl(itemId, previewUrl);
-    setRegisterFormVersion((version) => version + 1);
-    setActiveTab('stock');
-    setToast({
-      message: '초안에 새 상품이 추가되었습니다. 하단 저장 버튼을 눌러 반영하세요.',
-      type: 'success',
+    void runImmediateMutation((current, uploadedImageUrls) => ({
+      ...current,
+      items: [...current.items, {
+        ...newItem,
+        imageUrl: uploadedImageUrls.get(itemId) ?? newItem.imageUrl,
+      }],
+    }), imageFile ? { [itemId]: imageFile } : {}).then((saved) => {
+      if (!saved) return;
+      releasePreviewUrl(itemId);
+      setRegisterFormVersion((version) => version + 1);
+      setActiveTab('stock');
     });
   };
 
@@ -406,20 +546,46 @@ export default function AdminPage() {
     imageFile?: File,
     previewUrl?: string
   ) => {
-    updateDraftItem({ ...item, ...values, imageUrl: previewUrl ?? item.imageUrl }, imageFile);
+    const updatedItem = { ...item, ...values, imageUrl: previewUrl ?? item.imageUrl };
+    if (isDraftMode) {
+      updateDraftItem(updatedItem, imageFile);
+      keepPreviewUrl(item.id, previewUrl);
+      setSelectedItemId(null);
+      setToast({ message: '상품 정보를 초안에 반영했습니다.', type: 'success' });
+      return;
+    }
+
     keepPreviewUrl(item.id, previewUrl);
-    setSelectedItemId(null);
-    setToast({ message: '상품 정보를 초안에 반영했습니다.', type: 'success' });
+    void runImmediateMutation((current, uploadedImageUrls) => ({
+      ...current,
+      items: current.items.map((currentItem) => currentItem.id === item.id
+        ? { ...updatedItem, imageUrl: uploadedImageUrls.get(item.id) ?? updatedItem.imageUrl }
+        : currentItem),
+    }), imageFile ? { [item.id]: imageFile } : {}).then((saved) => {
+      if (!saved) return;
+      releasePreviewUrl(item.id);
+      setSelectedItemId(null);
+    });
   };
 
   const handleDeleteProduct = (item: ProductItem) => {
     if (!window.confirm(`'${item.name}' 상품을 초안에서 삭제할까요?`)) return;
-    removeDraftItem(item.id);
-    const previewUrl = previewUrlsRef.current[item.id];
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    delete previewUrlsRef.current[item.id];
-    setSelectedItemId(null);
-    setToast({ message: '상품을 초안에서 삭제했습니다.', type: 'success' });
+    if (isDraftMode) {
+      removeDraftItem(item.id);
+      releasePreviewUrl(item.id);
+      setSelectedItemId(null);
+      setToast({ message: '상품을 초안에서 삭제했습니다.', type: 'success' });
+      return;
+    }
+
+    void runImmediateMutation((current) => ({
+      ...current,
+      items: current.items.filter((currentItem) => currentItem.id !== item.id),
+    })).then((saved) => {
+      if (!saved) return;
+      releasePreviewUrl(item.id);
+      setSelectedItemId(null);
+    });
   };
 
   if (!user) {
@@ -500,43 +666,77 @@ export default function AdminPage() {
 
   return (
     <div className="mx-auto min-h-screen max-w-md bg-surface-page pb-28 text-stone-900 shadow-sm">
-      <div className="sticky top-0 z-20 bg-brand-primary text-white shadow-sm">
-        <header className="flex min-h-16 items-center justify-between px-4 py-3">
-          <h1 className="text-xl font-bold">{STORE_CONFIG.adminTitle}</h1>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="min-h-10 rounded-lg border border-white/30 px-3 py-1.5 text-sm font-semibold text-white"
-          >
-            로그아웃
-          </button>
-        </header>
-        <div className="px-4 pb-4">
-          <div className="flex min-h-14 items-center justify-between gap-3 rounded-xl bg-brand-primary-light px-4 py-3">
-            <div className="flex min-w-0 items-center gap-3 text-sm font-semibold">
-              <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${isOpen ? 'bg-emerald-400' : 'bg-gray-400'}`} />
-              <span>{isOpen ? '현재 매장 영업 중' : '현재 영업 종료·휴무'}</span>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={isOpen}
-              aria-label="매장 영업 상태"
-              onClick={toggleDraftOpen}
-              className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors ${isOpen ? 'bg-emerald-500' : 'bg-gray-500'}`}
+      <div className="sticky top-0 z-40 shadow-sm">
+        <header className="relative flex h-16 items-center justify-between bg-brand-primary px-4 text-white">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <h1 className="truncate text-xl font-bold">{STORE_CONFIG.adminTitle}</h1>
+            <span
+              aria-label={isOpen ? '현재 매장 영업 중' : '현재 영업 종료·휴무'}
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/20 px-2 py-1 text-[11px] font-semibold ${isOpen ? 'text-emerald-100' : 'text-white/70'}`}
             >
-              <span className={`absolute left-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${isOpen ? 'translate-x-5' : 'translate-x-0'}`} />
-            </button>
+              <span className={`h-1.5 w-1.5 rounded-full ${isOpen ? 'bg-emerald-400' : 'bg-stone-400'}`} />
+              {isOpen ? '영업 중' : '휴무'}
+            </span>
           </div>
-        </div>
-        <nav aria-label="관리 메뉴" className="flex border-b border-border-subtle bg-surface-card text-stone-600">
+          <button
+            ref={menuButtonRef}
+            type="button"
+            aria-label={isMenuOpen ? '관리 메뉴 닫기' : '관리 메뉴 열기'}
+            aria-expanded={isMenuOpen}
+            onClick={() => setIsMenuOpen((open) => !open)}
+            className="grid h-11 w-11 place-items-center rounded-lg border border-white/25 text-2xl leading-none text-white"
+          >
+            {isMenuOpen ? <X size={21} aria-hidden="true" /> : <Menu size={23} aria-hidden="true" />}
+          </button>
+          {isMenuOpen && (
+            <section
+              ref={menuPopupRef}
+              className="absolute right-3 top-[calc(100%-0.25rem)] z-50 w-72 rounded-xl border border-border-subtle bg-surface-card p-3 text-stone-800 shadow-xl"
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-2 py-3">
+                <span className="text-sm font-semibold">{isOpen ? '현재 매장 영업 중' : '현재 영업 종료·휴무'}</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={isOpen}
+                  aria-label="매장 영업 상태"
+                  onClick={handleBusinessStatusToggle}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full ${isOpen ? 'bg-brand-primary' : 'bg-stone-300'}`}
+                >
+                  <span className={`absolute left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${isOpen ? 'translate-x-5' : 'translate-x-0'}`} />
+                </button>
+              </div>
+              <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-2 py-3">
+                <span className="text-sm font-semibold">초안 모드</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={isDraftMode}
+                  aria-label="초안 모드"
+                  onClick={() => void handleDraftModeToggle()}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full ${isDraftMode ? 'bg-brand-primary' : 'bg-stone-300'}`}
+                >
+                  <span className={`absolute left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${isDraftMode ? 'translate-x-5' : 'translate-x-0'}`} />
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="min-h-11 w-full px-2 text-left text-sm font-semibold text-status-danger"
+              >
+                로그아웃
+              </button>
+            </section>
+          )}
+        </header>
+        <nav aria-label="관리 메뉴" className="flex h-12 border-b border-border-subtle bg-surface-card text-stone-600">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
               aria-current={activeTab === tab.id ? 'page' : undefined}
               onClick={() => setActiveTab(tab.id)}
-              className={`min-h-12 flex-1 border-b-2 px-2 text-sm ${
+                className={`h-12 flex-1 border-b-2 px-2 text-sm ${
                 activeTab === tab.id
                   ? 'border-brand-primary font-bold text-brand-primary'
                   : 'border-transparent text-stone-500'
@@ -576,49 +776,51 @@ export default function AdminPage() {
         )}
         {activeTab === 'stock' ? (
           <section aria-labelledby="stock-heading" className="space-y-4">
-            <div className="flex items-baseline justify-between">
-              <h2 id="stock-heading" className="text-lg font-bold text-stone-900">재고 관리</h2>
-              <span className="text-xs text-stone-500">{filteredStockItems.length}개 상품</span>
+            <div className="sticky top-28 z-20 -mx-4 space-y-3 bg-surface-page px-4 pb-3 pt-4">
+              <div className="flex items-baseline justify-between">
+                <h2 id="stock-heading" className="text-lg font-bold text-stone-900">재고 관리</h2>
+                <span className="text-xs text-stone-500">{filteredStockItems.length}개 상품</span>
+              </div>
+
+              <nav
+                aria-label="재고 카테고리 필터"
+                className="-mx-4 flex gap-2 overflow-x-auto whitespace-nowrap px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {stockCategories.map((category) => (
+                  <button
+                    key={category}
+                    type="button"
+                    aria-pressed={selectedStockCategory === category}
+                    onClick={() => setSelectedStockCategory(category)}
+                    className={`min-h-11 shrink-0 rounded-lg border px-4 text-sm font-semibold ${
+                      category === '품절'
+                        ? 'border-status-danger bg-surface-card text-status-danger'
+                        : category === '미노출'
+                          ? selectedStockCategory === category
+                            ? 'border-stone-600 bg-stone-600 text-white'
+                            : 'border-stone-400 bg-surface-card text-stone-700'
+                          : selectedStockCategory === category
+                            ? 'border-brand-primary bg-brand-primary text-white'
+                            : 'border-border-subtle bg-surface-card text-stone-700'
+                    }`}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </nav>
+
+              <label className="flex min-h-12 items-center gap-2 rounded-xl border border-border-subtle bg-surface-card px-3.5 focus-within:border-brand-primary focus-within:ring-1 focus-within:ring-brand-primary">
+                <Search size={18} className="shrink-0 text-stone-500" aria-hidden="true" />
+                <input
+                  type="search"
+                  value={stockSearchQuery}
+                  onChange={(event) => setStockSearchQuery(event.target.value)}
+                  placeholder="상품명 빠른 검색"
+                  aria-label="상품명 검색"
+                  className="min-w-0 flex-1 bg-transparent text-sm text-stone-900 outline-none placeholder:text-stone-400"
+                />
+              </label>
             </div>
-
-            <nav
-              aria-label="재고 카테고리 필터"
-              className="-mx-4 flex gap-2 overflow-x-auto whitespace-nowrap px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            >
-              {stockCategories.map((category) => (
-                <button
-                  key={category}
-                  type="button"
-                  aria-pressed={selectedStockCategory === category}
-                  onClick={() => setSelectedStockCategory(category)}
-                  className={`min-h-11 shrink-0 rounded-lg border px-4 text-sm font-semibold ${
-                    category === '품절'
-                      ? 'border-status-danger bg-surface-card text-status-danger'
-                      : category === '미노출'
-                        ? selectedStockCategory === category
-                          ? 'border-stone-600 bg-stone-600 text-white'
-                          : 'border-stone-400 bg-surface-card text-stone-700'
-                      : selectedStockCategory === category
-                        ? 'border-brand-primary bg-brand-primary text-white'
-                        : 'border-border-subtle bg-surface-card text-stone-700'
-                  }`}
-                >
-                  {category}
-                </button>
-              ))}
-            </nav>
-
-            <label className="flex min-h-12 items-center gap-2 rounded-xl border border-border-subtle bg-surface-card px-3.5 focus-within:border-brand-primary focus-within:ring-1 focus-within:ring-brand-primary">
-              <Search size={18} className="shrink-0 text-stone-500" aria-hidden="true" />
-              <input
-                type="search"
-                value={stockSearchQuery}
-                onChange={(event) => setStockSearchQuery(event.target.value)}
-                placeholder="상품명 빠른 검색"
-                aria-label="상품명 검색"
-                className="min-w-0 flex-1 bg-transparent text-sm text-stone-900 outline-none placeholder:text-stone-400"
-              />
-            </label>
 
             {filteredStockItems.length === 0 ? (
                 <p className="rounded-xl border border-border-subtle bg-surface-card px-4 py-10 text-center text-sm text-stone-500">
@@ -633,7 +835,7 @@ export default function AdminPage() {
                     <li key={item.id} className={`rounded-xl border bg-surface-card p-4 ${isSoldOut && item.isVisible ? 'border-status-danger/30' : 'border-border-subtle'}`}>
                       <div className="flex items-center gap-3">
                         <img
-                          src={item.imageUrl}
+                          src={item.imageUrl || defaultProductImage}
                           alt=""
                           className="h-[52px] w-[52px] shrink-0 rounded-lg object-cover"
                         />
@@ -660,7 +862,18 @@ export default function AdminPage() {
                           type="button"
                           aria-label={item.isVisible ? `${item.name} 미노출로 전환` : `${item.name} 노출로 전환`}
                           aria-pressed={!item.isVisible}
-                          onClick={() => updateDraftItem({ ...item, isVisible: !item.isVisible })}
+                          onClick={() => {
+                            if (isDraftMode) {
+                              updateDraftItem({ ...item, isVisible: !item.isVisible });
+                              return;
+                            }
+                            void runImmediateMutation((current) => ({
+                              ...current,
+                              items: current.items.map((currentItem) => currentItem.id === item.id
+                                ? { ...currentItem, isVisible: !currentItem.isVisible }
+                                : currentItem),
+                            }));
+                          }}
                           className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg border ${item.isVisible ? 'border-border-subtle text-stone-500' : 'border-stone-400 bg-stone-100 text-stone-700'}`}
                         >
                           {item.isVisible ? <Eye size={19} aria-hidden="true" /> : <EyeOff size={19} aria-hidden="true" />}
@@ -671,7 +884,7 @@ export default function AdminPage() {
                         <button
                           type="button"
                           aria-label={`${item.name} 수량 1 감소`}
-                          onClick={() => updateDraftStock(item.id, Math.max(0, item.stock - 1))}
+                          onClick={() => void handleStockChange(item.id, Math.max(0, item.stock - 1))}
                           className="h-11 w-12 shrink-0 rounded-lg border border-border-subtle bg-surface-card text-lg font-bold text-brand-primary active:bg-surface-page"
                         >
                           -1
@@ -686,7 +899,7 @@ export default function AdminPage() {
                             value={item.stock}
                             onChange={(event) => {
                               const parsedStock = Number.parseInt(event.target.value, 10);
-                              updateDraftStock(item.id, Number.isNaN(parsedStock) ? 0 : Math.max(0, parsedStock));
+                              void handleStockChange(item.id, Number.isNaN(parsedStock) ? 0 : Math.max(0, parsedStock));
                             }}
                             className="min-w-0 w-full bg-transparent text-center text-lg font-bold outline-none focus:text-brand-primary"
                           />
@@ -695,7 +908,7 @@ export default function AdminPage() {
                         <button
                           type="button"
                           aria-label={`${item.name} 수량 1 증가`}
-                          onClick={() => updateDraftStock(item.id, item.stock + 1)}
+                          onClick={() => void handleStockChange(item.id, item.stock + 1)}
                           className="h-11 w-12 shrink-0 rounded-lg bg-brand-primary text-lg font-bold text-white active:bg-brand-primary-dark"
                         >
                           +1
@@ -709,7 +922,18 @@ export default function AdminPage() {
                             role="switch"
                             aria-checked={item.isSoldOut}
                             aria-label={`${item.name} 품절 상태`}
-                            onClick={() => toggleDraftSoldOut(item.id)}
+                            onClick={() => {
+                              if (isDraftMode) {
+                                toggleDraftSoldOut(item.id);
+                                return;
+                              }
+                              void runImmediateMutation((current) => ({
+                                ...current,
+                                items: current.items.map((currentItem) => currentItem.id === item.id
+                                  ? { ...currentItem, isSoldOut: !currentItem.isSoldOut }
+                                  : currentItem),
+                              }));
+                            }}
                             className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${item.isSoldOut ? 'bg-status-danger' : 'bg-stone-300'}`}
                           >
                             <span className={`absolute left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${item.isSoldOut ? 'translate-x-5' : 'translate-x-0'}`} />
@@ -755,6 +979,47 @@ export default function AdminPage() {
                   className="min-h-40 w-full resize-y rounded-xl border border-border-subtle bg-surface-card p-3 text-sm leading-6 focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
                   placeholder="고객에게 전달할 공지사항을 입력하세요."
                 />
+                <div>
+                  <label htmlFor="closed-title-draft" className="mb-1 block text-sm font-semibold text-stone-800">
+                    휴무 안내 문구
+                  </label>
+                  <textarea
+                    id="closed-title-draft"
+                    value={closedTitleDraft}
+                    onChange={(event) => setClosedTitleDraft(event.target.value)}
+                    rows={3}
+                    maxLength={500}
+                    className="min-h-24 w-full resize-y rounded-xl border border-border-subtle bg-surface-card p-3 text-sm leading-6 focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
+                    placeholder="비워두면 기본 휴무 안내 문구를 표시합니다."
+                  />
+                </div>
+                <div>
+                  <label htmlFor="kakao-chat-url-draft" className="mb-1 block text-sm font-semibold text-stone-800">
+                    카카오톡 채팅방 링크
+                  </label>
+                  <input
+                    id="kakao-chat-url-draft"
+                    type="url"
+                    value={kakaoChatUrlDraft}
+                    onChange={(event) => setKakaoChatUrlDraft(event.target.value)}
+                    className="min-h-12 w-full rounded-lg border border-border-subtle bg-surface-card px-3 text-sm text-stone-900 focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
+                    placeholder="https://pf.kakao.com/_채널ID/chat"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="order-guide-draft" className="mb-1 block text-sm font-semibold text-stone-800">
+                    주문 양식 안내
+                  </label>
+                  <textarea
+                    id="order-guide-draft"
+                    value={orderGuideTextDraft}
+                    onChange={(event) => setOrderGuideTextDraft(event.target.value)}
+                    rows={4}
+                    maxLength={1000}
+                    className="min-h-28 w-full resize-y rounded-xl border border-border-subtle bg-surface-card p-3 text-sm leading-6 focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
+                    placeholder="예) 성함 / 빵 종류 및 수량 / 픽업 예정 시간"
+                  />
+                </div>
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -769,7 +1034,7 @@ export default function AdminPage() {
                     className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-lg bg-brand-primary font-bold text-white active:bg-brand-primary-dark"
                   >
                     <Check size={17} aria-hidden="true" />
-                    초안에 반영
+                    저장하기
                   </button>
                 </div>
               </form>
@@ -778,6 +1043,26 @@ export default function AdminPage() {
                 <div className="min-h-32 whitespace-pre-wrap break-words rounded-xl border border-border-subtle bg-surface-card p-4 text-sm leading-6 text-stone-800">
                   {draftData.notice || '등록된 공지사항이 없습니다.'}
                 </div>
+                <dl className="space-y-3 rounded-xl border border-border-subtle bg-surface-card p-4">
+                  <div>
+                    <dt className="mb-1 text-xs font-semibold text-stone-500">휴무 안내 문구</dt>
+                    <dd className="min-h-10 whitespace-pre-line rounded-lg bg-surface-muted px-3 py-2 text-sm text-stone-800">
+                      {draftData.closedTitle || '현재 영업 준비 중이거나 휴무일입니다.'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="mb-1 text-xs font-semibold text-stone-500">카카오톡 채팅방 링크</dt>
+                    <dd className="min-h-10 break-all rounded-lg bg-surface-muted px-3 py-2 text-sm text-stone-800">
+                      {draftData.kakaoChatUrl || '설정되지 않음'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="mb-1 text-xs font-semibold text-stone-500">주문 양식 안내</dt>
+                    <dd className="min-h-10 whitespace-pre-line rounded-lg bg-surface-muted px-3 py-2 text-sm text-stone-800">
+                      {draftData.orderGuideText || '설정되지 않음'}
+                    </dd>
+                  </div>
+                </dl>
                 <button
                   type="button"
                   onClick={handleNoticeEdit}
@@ -792,12 +1077,11 @@ export default function AdminPage() {
           <section aria-labelledby="register-heading" className="space-y-4">
             <div>
               <h2 id="register-heading" className="text-lg font-bold text-stone-900">새 상품 등록</h2>
-              <p className="mt-1 text-sm text-stone-500">등록 내용과 사진은 초안에 반영되며, 하단 저장 버튼을 눌러야 반영됩니다.</p>
             </div>
             <ProductDraftForm
               key={registerFormVersion}
               categories={draftCategories}
-              submitLabel="초안에 추가"
+              submitLabel="새 빵 등록"
               submitFormId="register-product-form"
               onSubmit={handleRegisterProduct}
             />
@@ -807,7 +1091,7 @@ export default function AdminPage() {
 
       {editingItem && (
         <div
-          className="fixed inset-0 z-40 flex items-end justify-center bg-black/50 sm:items-center"
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/50"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setSelectedItemId(null);
           }}
@@ -816,9 +1100,9 @@ export default function AdminPage() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="edit-product-heading"
-            className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-xl border border-border-subtle bg-surface-card p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:rounded-xl"
+            className="flex h-[80dvh] max-h-[80dvh] w-full max-w-md flex-col overflow-hidden rounded-xl border border-border-subtle bg-surface-card shadow-xl"
           >
-            <div className="mb-4 flex items-center justify-between">
+            <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-border-subtle bg-surface-card px-4 py-3">
               <h2 id="edit-product-heading" className="text-lg font-bold text-brand-primary">상품 편집</h2>
               <button
                 type="button"
@@ -829,17 +1113,19 @@ export default function AdminPage() {
                 <X size={20} aria-hidden="true" />
               </button>
             </div>
-            <ProductDraftForm
-              key={editingItem.id}
-              categories={draftCategories}
-              initialItem={editingItem}
-              submitLabel="초안에 반영"
-              onSubmit={(values, imageFile, previewUrl) =>
-                handleEditProduct(editingItem, values, imageFile, previewUrl)
-              }
-              onCancel={() => setSelectedItemId(null)}
-              onDelete={() => handleDeleteProduct(editingItem)}
-            />
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+              <ProductDraftForm
+                key={editingItem.id}
+                categories={draftCategories}
+                initialItem={editingItem}
+                submitLabel="저장하기"
+                onSubmit={(values, imageFile, previewUrl) =>
+                  handleEditProduct(editingItem, values, imageFile, previewUrl)
+                }
+                onCancel={() => setSelectedItemId(null)}
+                onDelete={() => handleDeleteProduct(editingItem)}
+              />
+            </div>
           </section>
         </div>
       )}
@@ -853,7 +1139,7 @@ export default function AdminPage() {
                 form="register-product-form"
                 className="inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-brand-primary px-3 font-bold text-white active:bg-brand-primary-dark"
               >
-                초안에 추가
+                새 빵 등록
               </button>
             )}
             {hasChanges && (

@@ -1,12 +1,15 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { onSnapshot, setDoc } from 'firebase/firestore';
-import { MENU_DOC_REF } from '../lib/firebase';
+import { onSnapshot, runTransaction, setDoc } from 'firebase/firestore';
+import { db, MENU_DOC_REF } from '../lib/firebase';
 import type { ProductItem, StoreData } from '../types/bakery';
 
 function createDefaultStoreData(): StoreData {
   return {
     updatedAt: new Date().toISOString(),
     notice: '',
+    closedTitle: '',
+    kakaoChatUrl: '',
+    orderGuideText: '',
     isOpen: true,
     items: [],
   };
@@ -16,6 +19,9 @@ function normalizeStoreData(data: StoreData): StoreData {
   return {
     ...data,
     isOpen: data.isOpen ?? true,
+    closedTitle: data.closedTitle ?? '',
+    kakaoChatUrl: data.kakaoChatUrl ?? '',
+    orderGuideText: data.orderGuideText ?? '',
     items: data.items.map((item) => ({
       ...item,
       isSoldOut: item.isSoldOut ?? false,
@@ -26,6 +32,9 @@ function normalizeStoreData(data: StoreData): StoreData {
 function hasSameEditableData(left: StoreData, right: StoreData) {
   return (
     left.notice === right.notice &&
+    left.closedTitle === right.closedTitle &&
+    left.kakaoChatUrl === right.kakaoChatUrl &&
+    left.orderGuideText === right.orderGuideText &&
     (left.isOpen ?? true) === (right.isOpen ?? true) &&
     JSON.stringify(left.categories ?? []) === JSON.stringify(right.categories ?? []) &&
     JSON.stringify(left.items) === JSON.stringify(right.items)
@@ -48,6 +57,7 @@ export function useStoreData() {
   const hasServerUpdateRef = useRef(false);
   const draftRevisionRef = useRef(0);
   const isSavingRef = useRef(false);
+  const lastImmediateWriteUpdatedAtRef = useRef<string | null>(null);
 
   const commitDraft = useCallback((nextDraft: StoreData, nextPendingImages = pendingImagesRef.current) => {
     draftDataRef.current = nextDraft;
@@ -82,10 +92,13 @@ export function useStoreData() {
           serverDataRef.current = nextServerData;
           setServerData(nextServerData);
 
+          const isImmediateWrite = nextServerData.updatedAt === lastImmediateWriteUpdatedAtRef.current;
+          if (isImmediateWrite) lastImmediateWriteUpdatedAtRef.current = null;
+
           if (!hasChangesRef.current) {
             draftDataRef.current = nextServerData;
             setDraftData(nextServerData);
-          } else if (serverDataChanged) {
+          } else if (serverDataChanged && !isImmediateWrite) {
             hasServerUpdateRef.current = true;
             setHasServerUpdate(true);
           }
@@ -142,6 +155,10 @@ export function useStoreData() {
 
   const updateDraftNotice = useCallback((notice: string) => {
     commitDraft({ ...draftDataRef.current, notice });
+  }, [commitDraft]);
+
+  const updateDraftSettings = useCallback((settings: Partial<Pick<StoreData, 'notice' | 'closedTitle' | 'kakaoChatUrl' | 'orderGuideText'>>) => {
+    commitDraft({ ...draftDataRef.current, ...settings });
   }, [commitDraft]);
 
   const toggleDraftOpen = useCallback(() => {
@@ -236,6 +253,83 @@ export function useStoreData() {
     }
   }, []);
 
+  const updateStoreImmediately = useCallback(async (
+    update: (current: StoreData, uploadedImageUrls: Map<string, string>) => StoreData,
+    imageFiles: Record<string, File> = {}
+  ) => {
+    if (isSavingRef.current) throw new Error('다른 저장 작업이 진행 중입니다.');
+
+    isSavingRef.current = true;
+    setIsSaving(true);
+    const previousServerData = serverDataRef.current;
+    try {
+      const uploadedImages = await Promise.all(
+        Object.entries(imageFiles).map(async ([itemId, file]) => {
+          const { uploadProductImage } = await import('../lib/imageUpload');
+          return [itemId, await uploadProductImage(file)] as const;
+        })
+      );
+      const uploadedImageUrls = new Map(uploadedImages);
+      let serverChangedDuringMutation = false;
+      const payload = await runTransaction(db, async (transaction) => {
+        const snapshot = await transaction.get(MENU_DOC_REF);
+        const currentData = snapshot.exists()
+          ? normalizeStoreData(snapshot.data() as StoreData)
+          : createDefaultStoreData();
+        serverChangedDuringMutation ||= currentData.updatedAt !== previousServerData.updatedAt;
+        const nextData = update(currentData, uploadedImageUrls);
+        const previousTimestamp = Date.parse(currentData.updatedAt);
+        const updatedAt = new Date(Math.max(
+          Date.now(),
+          Number.isNaN(previousTimestamp) ? 0 : previousTimestamp + 1
+        )).toISOString();
+        const nextPayload = normalizeStoreData({
+          ...nextData,
+          updatedAt,
+        });
+        lastImmediateWriteUpdatedAtRef.current = nextPayload.updatedAt;
+        transaction.set(MENU_DOC_REF, nextPayload);
+        return nextPayload;
+      });
+
+      const currentDraftData = draftDataRef.current;
+      const hasDraftEdits = hasChangesRef.current;
+      const nextDraftData = hasDraftEdits
+        ? {
+            ...payload,
+            ...(currentDraftData.notice !== previousServerData.notice ? { notice: currentDraftData.notice } : {}),
+            ...(currentDraftData.closedTitle !== previousServerData.closedTitle ? { closedTitle: currentDraftData.closedTitle } : {}),
+            ...(currentDraftData.kakaoChatUrl !== previousServerData.kakaoChatUrl ? { kakaoChatUrl: currentDraftData.kakaoChatUrl } : {}),
+            ...(currentDraftData.orderGuideText !== previousServerData.orderGuideText ? { orderGuideText: currentDraftData.orderGuideText } : {}),
+            ...((currentDraftData.isOpen ?? true) !== (previousServerData.isOpen ?? true) ? { isOpen: currentDraftData.isOpen } : {}),
+            ...(JSON.stringify(currentDraftData.categories ?? []) !== JSON.stringify(previousServerData.categories ?? [])
+              ? { categories: currentDraftData.categories }
+              : {}),
+            ...(JSON.stringify(currentDraftData.items) !== JSON.stringify(previousServerData.items)
+              ? { items: currentDraftData.items }
+              : {}),
+          }
+        : payload;
+
+      serverDataRef.current = payload;
+      draftDataRef.current = nextDraftData;
+      const changed = Object.keys(pendingImagesRef.current).length > 0 || !hasSameEditableData(payload, nextDraftData);
+      hasChangesRef.current = changed;
+      setHasChanges(changed);
+      const hasServerUpdate = changed && (hasServerUpdateRef.current || serverChangedDuringMutation);
+      hasServerUpdateRef.current = hasServerUpdate;
+      setServerData(payload);
+      setDraftData(nextDraftData);
+      setHasServerUpdate(hasServerUpdate);
+    } catch (error) {
+      lastImmediateWriteUpdatedAtRef.current = null;
+      throw error;
+    } finally {
+      isSavingRef.current = false;
+      setIsSaving(false);
+    }
+  }, []);
+
   const discardChanges = useCallback(() => {
     const currentServerData = serverDataRef.current;
     draftDataRef.current = currentServerData;
@@ -272,9 +366,11 @@ export function useStoreData() {
     toggleDraftSoldOut,
     toggleDraftOpen,
     updateDraftNotice,
+    updateDraftSettings,
     updateDraftItem,
     removeDraftItem,
     saveChanges,
+    updateStoreImmediately,
     discardChanges,
     loadLatestServerData: discardChanges,
     storeData: draftData,

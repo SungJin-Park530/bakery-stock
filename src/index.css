@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+@media (max-width: 767px) {
+	input,
+	textarea,
+	select {
+		font-size: 16px;
+	}
+}
+
 @theme {
 	--color-brand-primary: #1B3B2B;
 	--color-brand-primary-dark: #132A1E;

@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStoreData } from '../hooks/useStoreData';
 import { STORE_CONFIG } from '../config/storeConfig';
-import { Bell, ChevronDown, RotateCcw, Search } from 'lucide-react';
+import defaultProductImage from '../assets/defaultimg.webp';
+import { Bell, ChevronDown, MessageCircle, RotateCcw, Search, X } from 'lucide-react';
 
 function formatUpdatedAt(value: string) {
   const updatedAt = new Date(value);
@@ -42,10 +43,48 @@ export default function CustomerPage() {
   const { serverData, storeData, loading, error } = useStoreData();
   const customerData = serverData ?? storeData;
   const [isNoticeExpanded, setIsNoticeExpanded] = useState(false);
+  const [isNoticeScrollable, setIsNoticeScrollable] = useState(false);
+  const [isNoticeAtBottom, setIsNoticeAtBottom] = useState(false);
+  const [isOrderSheetOpen, setIsOrderSheetOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('전체');
   const [searchQuery, setSearchQuery] = useState('');
+  const noticeContentRef = useRef<HTMLSpanElement>(null);
 
-  if (loading) return <div className="p-4 text-center">불러오는 중...</div>;
+  useEffect(() => {
+    const content = noticeContentRef.current;
+    if (!isNoticeExpanded || !content) {
+      setIsNoticeScrollable(false);
+      setIsNoticeAtBottom(false);
+      return;
+    }
+
+    const updateScrollState = () => {
+      const canScroll = content.scrollHeight > content.clientHeight + 1;
+      setIsNoticeScrollable(canScroll);
+      setIsNoticeAtBottom(!canScroll || content.scrollTop + content.clientHeight >= content.scrollHeight - 1);
+    };
+    const animationFrame = requestAnimationFrame(updateScrollState);
+    const resizeObserver = new ResizeObserver(updateScrollState);
+    resizeObserver.observe(content);
+
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      resizeObserver.disconnect();
+    };
+  }, [customerData.notice, isNoticeExpanded]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-surface-page text-brand-primary">
+        <span
+          className="mb-4 h-10 w-10 animate-spin rounded-full border-4 border-border-subtle border-t-brand-primary"
+          role="status"
+          aria-label="불러오는 중"
+        />
+        <p className="text-sm font-medium">매장 정보를 불러오는 중입니다...</p>
+      </div>
+    );
+  }
   if (error) return <div className="p-4 text-center text-red-500">{error}</div>;
 
   const visibleItems = customerData.items.filter((item) => item.isVisible !== false);
@@ -95,12 +134,32 @@ export default function CustomerPage() {
                 type="button"
                 aria-label={isNoticeExpanded ? '공지사항 접기' : '공지사항 펼치기'}
                 aria-expanded={isNoticeExpanded}
-                onClick={() => setIsNoticeExpanded((expanded) => !expanded)}
+                onClick={() => {
+                  if (isNoticeExpanded && noticeContentRef.current) {
+                    noticeContentRef.current.scrollTop = 0;
+                  }
+                  setIsNoticeExpanded((expanded) => !expanded);
+                }}
                 className="flex w-full items-center gap-3 px-3.5 py-4 text-left"
               >
                 <Bell className="shrink-0 text-brand-accent" size={20} aria-hidden="true" />
                 <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
-                  <span className={`min-w-0 flex-1 whitespace-pre-wrap text-sm ${isNoticeExpanded ? 'max-h-40 overflow-y-auto' : 'line-clamp-1'}`}>
+                  <span
+                    ref={noticeContentRef}
+                    onScroll={(event) => {
+                      const content = event.currentTarget;
+                      setIsNoticeAtBottom(content.scrollTop + content.clientHeight >= content.scrollHeight - 1);
+                    }}
+                    style={{
+                      maskImage: isNoticeScrollable && !isNoticeAtBottom
+                        ? 'linear-gradient(to bottom, black 70%, transparent 100%)'
+                        : 'none',
+                      WebkitMaskImage: isNoticeScrollable && !isNoticeAtBottom
+                        ? 'linear-gradient(to bottom, black 70%, transparent 100%)'
+                        : 'none',
+                    }}
+                    className={`min-w-0 flex-1 whitespace-pre-wrap text-sm ${isNoticeExpanded ? 'max-h-32 overflow-y-auto' : 'line-clamp-1 overflow-hidden'}`}
+                  >
                     {customerData.notice}
                   </span>
                   <ChevronDown
@@ -158,8 +217,9 @@ export default function CustomerPage() {
         {!isOpen ? (
           <div className="flex min-h-[45vh] items-center justify-center">
             <section className="w-full rounded-xl border border-border-subtle bg-surface-card px-6 py-10 text-center">
-              <p className="text-lg font-bold text-brand-primary">{STORE_CONFIG.closedTitle}</p>
-              <p className="mt-2 text-sm text-stone-500">{STORE_CONFIG.closedSubtitle}</p>
+              <p className="whitespace-pre-line text-lg font-bold text-brand-primary">
+                {customerData.closedTitle.trim() || '현재 영업 준비 중이거나 휴무일입니다.'}
+              </p>
             </section>
           </div>
         ) : (
@@ -202,7 +262,7 @@ export default function CustomerPage() {
                     >
                       <div className={`relative h-18 w-18 shrink-0 overflow-hidden rounded-lg ${isSoldOut ? 'grayscale' : ''}`}>
                         <img
-                          src={item.imageUrl}
+                          src={item.imageUrl || defaultProductImage}
                           alt={item.name}
                           loading="lazy"
                           className="h-full w-full object-cover"
@@ -237,10 +297,62 @@ export default function CustomerPage() {
                 })}
               </ul>
             )}
-            <p className="mt-5 text-center text-xs text-stone-500">{STORE_CONFIG.footerNotice}</p>
           </>
         )}
       </main>
+      <footer className="px-4 pb-12 pt-5 text-center">
+        <p className="text-xs text-stone-500">{STORE_CONFIG.footerNotice}</p>
+        <p className="mt-1 text-[11px] text-stone-400">{STORE_CONFIG.inAppBrowserNotice}</p>
+      </footer>
+      {customerData.kakaoChatUrl.trim() && (
+        <button
+          type="button"
+          onClick={() => setIsOrderSheetOpen(true)}
+          className="fixed bottom-6 right-5 z-30 inline-flex min-h-12 items-center gap-2 rounded-full bg-[#FEE500] px-4 text-sm font-bold text-stone-900 shadow-lg"
+        >
+          <MessageCircle size={19} aria-hidden="true" />
+          카톡 주문/문의
+        </button>
+      )}
+      {isOrderSheetOpen && customerData.kakaoChatUrl.trim() && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setIsOrderSheetOpen(false);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="order-sheet-title"
+            className="w-full max-w-md rounded-t-2xl bg-surface-card p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-xl sm:rounded-2xl"
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 id="order-sheet-title" className="text-lg font-bold text-brand-primary">카카오톡 주문/문의</h2>
+              <button
+                type="button"
+                aria-label="주문 안내 닫기"
+                onClick={() => setIsOrderSheetOpen(false)}
+                className="grid h-10 w-10 place-items-center rounded-full text-stone-600 active:bg-surface-muted"
+              >
+                <X size={20} aria-hidden="true" />
+              </button>
+            </div>
+            <div className="mb-5 min-h-20 whitespace-pre-line rounded-xl border border-border-subtle bg-surface-muted p-4 text-sm leading-6 text-stone-700">
+              {customerData.orderGuideText}
+            </div>
+            <a
+              href={customerData.kakaoChatUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FEE500] px-4 text-sm font-bold text-stone-900"
+            >
+              <MessageCircle size={19} aria-hidden="true" />
+              카카오톡 채팅방 열기
+            </a>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
