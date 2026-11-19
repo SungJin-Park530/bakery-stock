@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useStoreData } from '../hooks/useStoreData';
-import { Bell, ChevronDown, ChevronUp, Clock3, RotateCcw, Search, X } from 'lucide-react';
+import { STORE_CONFIG } from '../config/storeConfig';
+import { Bell, ChevronDown, RotateCcw, Search } from 'lucide-react';
 
 function formatUpdatedAt(value: string) {
   const updatedAt = new Date(value);
@@ -73,39 +74,42 @@ export default function CustomerPage() {
     });
 
   return (
-    <div className="mx-auto min-h-screen max-w-md bg-stone-50 pb-10 text-stone-900 shadow-sm">
-      <header className="sticky top-0 z-20 bg-white shadow-sm">
-        <div className="px-5 pb-4 pt-6">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="mb-1 text-xs font-semibold tracking-wide text-amber-700">오늘의 빵</p>
-              <h1 className="text-2xl font-bold leading-tight">동네빵집 재고알리미</h1>
-            </div>
-            <div className="mt-1 flex shrink-0 items-center gap-1 text-right text-xs text-stone-500">
-              <Clock3 size={14} aria-hidden="true" />
-              <span>{formatUpdatedAt(customerData.updatedAt)}</span>
-            </div>
+    <div className="mx-auto min-h-screen max-w-md bg-surface-page pb-8 text-stone-900 shadow-sm">
+      <header className="sticky top-0 z-20 bg-brand-primary text-white shadow-sm">
+        <div className="px-5 pb-5 pt-5">
+          <div className="flex items-center justify-between gap-3">
+            <p className="rounded-md bg-brand-accent px-3 py-1.5 text-sm font-bold text-white">
+              {STORE_CONFIG.badgeText}
+            </p>
+            <span className="shrink-0 text-right text-xs text-white/70">
+              {formatUpdatedAt(customerData.updatedAt)}
+            </span>
           </div>
+          <h1 className="mt-4 whitespace-nowrap text-2xl font-bold leading-tight">
+            {STORE_CONFIG.storeName}
+          </h1>
 
           {customerData.notice.trim() && (
-            <section className="mt-4 rounded-md border border-amber-200 bg-amber-100 text-sm leading-5 text-amber-950">
-              <div className="flex items-start gap-3 px-3 py-2.5">
-                <Bell className="mt-0.5 shrink-0 text-amber-700" size={17} aria-hidden="true" />
-                <button
-                  type="button"
-                  aria-expanded={isNoticeExpanded}
-                  onClick={() => setIsNoticeExpanded((expanded) => !expanded)}
-                  className="flex min-w-0 flex-1 items-start justify-between gap-2 text-left"
-                >
-                  <p className={`min-w-0 flex-1 whitespace-pre-wrap ${isNoticeExpanded ? 'max-h-40 overflow-y-auto' : 'line-clamp-1'}`}>
+            <section className="mt-5 rounded-lg border border-white/10 bg-brand-primary-dark text-sm leading-5 text-white">
+              <button
+                type="button"
+                aria-label={isNoticeExpanded ? '공지사항 접기' : '공지사항 펼치기'}
+                aria-expanded={isNoticeExpanded}
+                onClick={() => setIsNoticeExpanded((expanded) => !expanded)}
+                className="flex w-full items-center gap-3 px-3.5 py-4 text-left"
+              >
+                <Bell className="shrink-0 text-brand-accent" size={20} aria-hidden="true" />
+                <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                  <span className={`min-w-0 flex-1 whitespace-pre-wrap text-sm ${isNoticeExpanded ? 'max-h-40 overflow-y-auto' : 'line-clamp-1'}`}>
                     {customerData.notice}
-                  </p>
-                  <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-amber-800">
-                    {isNoticeExpanded ? '접기' : '펼치기'}
-                    {isNoticeExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                   </span>
-                </button>
-              </div>
+                  <ChevronDown
+                    size={18}
+                    aria-hidden="true"
+                    className={`shrink-0 transition-transform ${isNoticeExpanded ? 'rotate-180' : ''}`}
+                  />
+                </span>
+              </button>
             </section>
           )}
         </div>
@@ -114,7 +118,7 @@ export default function CustomerPage() {
           <>
             <nav
               aria-label="상품 카테고리"
-              className="flex gap-2 overflow-x-auto whitespace-nowrap border-b border-stone-100 px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="flex gap-5 overflow-x-auto whitespace-nowrap border-b border-border-subtle bg-surface-card px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
               {categories.map((category) => (
                 <button
@@ -122,10 +126,10 @@ export default function CustomerPage() {
                   type="button"
                   aria-pressed={selectedCategory === category}
                   onClick={() => setSelectedCategory(category)}
-                  className={`min-h-11 shrink-0 border-b-2 px-2 text-sm font-semibold ${
+                  className={`min-h-11 shrink-0 border-b-2 px-2 text-sm ${
                     selectedCategory === category
-                      ? 'border-amber-700 text-amber-800'
-                      : 'border-transparent text-stone-500'
+                      ? 'border-brand-primary font-bold text-brand-primary'
+                      : 'border-transparent font-semibold text-stone-500'
                   }`}
                 >
                   {category}
@@ -133,27 +137,17 @@ export default function CustomerPage() {
               ))}
             </nav>
 
-            <div className="px-4 py-3">
-              <label className="flex min-h-11 items-center gap-2 rounded-md border border-stone-200 bg-stone-50 px-3 focus-within:border-amber-600">
+            <div className="bg-surface-card px-4 py-3.5">
+              <label className="flex min-h-12 items-center gap-2 rounded-lg border border-border-subtle bg-surface-muted px-3.5 focus-within:border-brand-primary">
                 <Search size={18} className="shrink-0 text-stone-500" aria-hidden="true" />
                 <input
                   type="search"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="빵 이름 검색"
+                  placeholder="찾으시는 빵 이름을 입력하세요"
                   aria-label="상품명 검색"
-                  className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-stone-400"
+                  className="min-w-0 flex-1 bg-transparent text-sm text-stone-900 outline-none placeholder:text-stone-400"
                 />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    aria-label="검색어 전체 삭제"
-                    onClick={() => setSearchQuery('')}
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-stone-500 active:bg-stone-200"
-                  >
-                    <X size={17} aria-hidden="true" />
-                  </button>
-                )}
               </label>
             </div>
           </>
@@ -163,22 +157,21 @@ export default function CustomerPage() {
       <main className="px-4 pt-5">
         {!isOpen ? (
           <div className="flex min-h-[45vh] items-center justify-center">
-            <section className="w-full rounded-lg border border-stone-200 bg-white px-6 py-10 text-center shadow-sm">
-              <p className="text-lg font-semibold text-stone-800">
-                현재 영업 준비 중이거나 휴무일입니다.
-              </p>
+            <section className="w-full rounded-xl border border-border-subtle bg-surface-card px-6 py-10 text-center">
+              <p className="text-lg font-bold text-brand-primary">{STORE_CONFIG.closedTitle}</p>
+              <p className="mt-2 text-sm text-stone-500">{STORE_CONFIG.closedSubtitle}</p>
             </section>
           </div>
         ) : (
           <>
-            <div className="mb-3 flex items-baseline justify-between">
-              <h2 className="text-lg font-bold">오늘 준비된 빵</h2>
-              <span className="text-xs text-stone-500">{filteredItems.length}가지</span>
+            <div className="mb-4 flex items-baseline justify-between">
+              <h2 className="text-xl font-bold">오늘 준비된 빵</h2>
+              <span className="text-sm font-medium text-stone-500">{filteredItems.length}가지</span>
             </div>
 
             {filteredItems.length === 0 ? (
               selectedCategory !== '전체' || searchQuery.trim() ? (
-                <div className="flex flex-col items-center rounded-md bg-white px-4 py-10 text-center">
+                <div className="flex flex-col items-center rounded-xl border border-border-subtle bg-surface-card px-4 py-10 text-center">
                   <p className="text-sm text-stone-600">조건에 맞는 상품이 없습니다.</p>
                   <button
                     type="button"
@@ -186,14 +179,14 @@ export default function CustomerPage() {
                       setSelectedCategory('전체');
                       setSearchQuery('');
                     }}
-                    className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-md border border-stone-300 px-4 text-sm font-semibold text-stone-700 active:bg-stone-100"
+                    className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-md border border-border-subtle px-4 text-sm font-semibold text-brand-primary active:bg-surface-muted"
                   >
                     <RotateCcw size={16} aria-hidden="true" />
                     검색 초기화
                   </button>
                 </div>
               ) : (
-                <p className="rounded-md bg-white px-4 py-10 text-center text-sm text-stone-500">
+                <p className="rounded-xl border border-border-subtle bg-surface-card px-4 py-10 text-center text-sm text-stone-500">
                   아직 등록된 빵이 없습니다.
                 </p>
               )
@@ -205,9 +198,9 @@ export default function CustomerPage() {
                   return (
                     <li
                       key={item.id}
-                      className="flex min-h-28 overflow-hidden rounded-md border border-stone-200 bg-white"
+                      className={`flex min-h-28 items-center gap-3.5 rounded-xl border border-border-subtle bg-surface-card p-3.5 ${isSoldOut ? 'opacity-60' : ''}`}
                     >
-                      <div className={`relative h-28 w-28 shrink-0 ${isSoldOut ? 'opacity-50 grayscale' : ''}`}>
+                      <div className={`relative h-18 w-18 shrink-0 overflow-hidden rounded-lg ${isSoldOut ? 'grayscale' : ''}`}>
                         <img
                           src={item.imageUrl}
                           alt={item.name}
@@ -215,24 +208,26 @@ export default function CustomerPage() {
                           className="h-full w-full object-cover"
                         />
                       </div>
-                      <div className="flex min-w-0 flex-1 items-center justify-between gap-2 p-3">
-                        <div className={`min-w-0 ${isSoldOut ? 'opacity-50 grayscale' : ''}`}>
-                          <p className="mb-1 inline-flex rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-600">
+                      <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="mb-1 inline-flex rounded bg-surface-muted px-2 py-1 text-xs font-medium text-stone-600">
                             {item.category}
                           </p>
-                          <h3 className="truncate font-semibold">{item.name}</h3>
+                          <h3 className="truncate text-base font-bold">{item.name}</h3>
                           <p className="mt-1 text-sm font-medium text-stone-700">
                             {item.price.toLocaleString('ko-KR')}원
                           </p>
                         </div>
-                        <div className="flex shrink-0 flex-col items-end gap-2">
+                        <div className="flex shrink-0 items-center justify-center">
                           {isSoldOut ? (
-                            <span className="rounded-sm bg-red-100 px-2 py-1 text-xs font-bold text-red-700">
+                            <span className="-rotate-6 rounded border border-status-soldout/60 px-3 py-1 text-sm font-bold text-status-soldout">
                               품절
                             </span>
                           ) : (
-                            <span className="text-right text-xs text-stone-500">
-                              남은 수량: {item.stock}개
+                            <span className="min-w-[76px] rounded-lg bg-brand-primary px-3 py-2 text-center text-white">
+                              <span className="mx-auto mb-1 block h-1.5 w-1.5 rounded-full bg-white/60" />
+                              <span className="block text-xs text-white/75">남은 수량</span>
+                              <span className="mt-0.5 block text-2xl font-bold leading-tight">{item.stock}개</span>
                             </span>
                           )}
                         </div>
@@ -242,6 +237,7 @@ export default function CustomerPage() {
                 })}
               </ul>
             )}
+            <p className="mt-5 text-center text-xs text-stone-500">{STORE_CONFIG.footerNotice}</p>
           </>
         )}
       </main>

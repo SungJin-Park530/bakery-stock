@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { Check, ImagePlus, LoaderCircle, Save, Search, Trash2, X } from 'lucide-react';
+import { Check, Eye, EyeOff, ImagePlus, LoaderCircle, Save, Search, Trash2, X } from 'lucide-react';
+import { STORE_CONFIG } from '../config/storeConfig';
 import { auth } from '../lib/firebaseAuth';
 import { useStoreData } from '../hooks/useStoreData';
 import type { ProductItem } from '../types/bakery';
@@ -15,6 +16,7 @@ interface ProductDraftFormProps {
   categories: string[];
   initialItem?: ProductItem;
   submitLabel: string;
+  submitFormId?: string;
   onSubmit: (values: ProductFormValues, imageFile?: File, previewUrl?: string) => void;
   onCancel?: () => void;
   onDelete?: () => void;
@@ -24,6 +26,7 @@ function ProductDraftForm({
   categories,
   initialItem,
   submitLabel,
+  submitFormId,
   onSubmit,
   onCancel,
   onDelete,
@@ -94,9 +97,9 @@ function ProductDraftForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form id={submitFormId} onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label htmlFor={`${idPrefix}-name`} className="mb-1 block text-sm font-semibold text-gray-800">
+        <label htmlFor={`${idPrefix}-name`} className="mb-1 block text-sm font-semibold text-stone-800">
           상품명
         </label>
         <input
@@ -106,19 +109,19 @@ function ProductDraftForm({
           onChange={(event) => setName(event.target.value)}
           maxLength={60}
           required
-          className="min-h-12 w-full rounded border border-gray-300 px-3 text-sm focus:border-blue-600 focus:outline-none"
+          className="min-h-12 w-full rounded-lg border border-border-subtle bg-surface-card px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
         />
       </div>
 
       <div>
-        <label htmlFor={`${idPrefix}-category`} className="mb-1 block text-sm font-semibold text-gray-800">
+        <label htmlFor={`${idPrefix}-category`} className="mb-1 block text-sm font-semibold text-stone-800">
           카테고리
         </label>
         <select
           id={`${idPrefix}-category`}
           value={categorySelection}
           onChange={(event) => setCategorySelection(event.target.value)}
-          className="min-h-12 w-full rounded border border-gray-300 bg-white px-3 text-sm"
+          className="min-h-12 w-full rounded-lg border border-border-subtle bg-surface-card px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
         >
           {categories.map((category) => <option key={category} value={category}>{category}</option>)}
           <option value={NEW_CATEGORY_OPTION}>직접 입력...</option>
@@ -132,14 +135,14 @@ function ProductDraftForm({
             aria-label="새 카테고리 이름"
             maxLength={30}
             required
-            className="mt-2 min-h-12 w-full rounded border border-gray-300 px-3 text-sm focus:border-blue-600 focus:outline-none"
+            className="mt-2 min-h-12 w-full rounded-lg border border-border-subtle bg-surface-card px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
           />
         )}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label htmlFor={`${idPrefix}-price`} className="mb-1 block text-sm font-semibold text-gray-800">
+          <label htmlFor={`${idPrefix}-price`} className="mb-1 block text-sm font-semibold text-stone-800">
             가격 (원)
           </label>
           <input
@@ -151,11 +154,11 @@ function ProductDraftForm({
             value={price}
             onChange={(event) => setPrice(event.target.value)}
             required
-            className="min-h-12 w-full rounded border border-gray-300 px-3 text-sm"
+            className="min-h-12 w-full rounded-lg border border-border-subtle bg-surface-card px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
           />
         </div>
         <div>
-          <label htmlFor={`${idPrefix}-stock`} className="mb-1 block text-sm font-semibold text-gray-800">
+          <label htmlFor={`${idPrefix}-stock`} className="mb-1 block text-sm font-semibold text-stone-800">
             {initialItem ? '현재 수량' : '초기 수량'}
           </label>
           <input
@@ -167,34 +170,34 @@ function ProductDraftForm({
             value={stock}
             onChange={(event) => setStock(event.target.value)}
             required
-            className="min-h-12 w-full rounded border border-gray-300 px-3 text-sm"
+            className="min-h-12 w-full rounded-lg border border-border-subtle bg-surface-card px-3 text-sm focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
           />
         </div>
       </div>
 
-      <div className="space-y-2 rounded border border-gray-200 bg-gray-50 p-3">
-        <label className="flex min-h-11 items-center justify-between gap-3 text-sm font-medium text-gray-800">
+      <div className="space-y-2 rounded-lg border border-border-subtle bg-surface-muted p-3">
+        <label className="flex min-h-11 items-center justify-between gap-3 text-sm font-medium text-stone-800">
           손님 화면에 노출
           <input
             type="checkbox"
             checked={isVisible}
             onChange={(event) => setIsVisible(event.target.checked)}
-            className="h-5 w-5 accent-blue-700"
+            className="h-5 w-5 accent-brand-primary"
           />
         </label>
-        <label className="flex min-h-11 items-center justify-between gap-3 text-sm font-medium text-gray-800">
+        <label className="flex min-h-11 items-center justify-between gap-3 text-sm font-medium text-stone-800">
           품절로 표시
           <input
             type="checkbox"
             checked={isSoldOut}
             onChange={(event) => setIsSoldOut(event.target.checked)}
-            className="h-5 w-5 accent-red-700"
+            className="h-5 w-5 accent-status-danger"
           />
         </label>
       </div>
 
       <div>
-        <label htmlFor={`${idPrefix}-image`} className="mb-1 block text-sm font-semibold text-gray-800">
+        <label htmlFor={`${idPrefix}-image`} className="mb-1 block text-sm font-semibold text-stone-800">
           사진 {initialItem ? '(선택)' : ''}
         </label>
         <input
@@ -204,17 +207,17 @@ function ProductDraftForm({
           capture="environment"
           onChange={handleFileChange}
           required={!initialItem}
-          className="min-h-12 w-full rounded border border-gray-300 bg-white p-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-gray-100 file:px-3 file:py-2"
+          className="min-h-12 w-full rounded-lg border border-border-subtle bg-surface-card p-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-surface-muted file:px-3 file:py-2 file:text-brand-primary focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
         />
         {previewUrl ? (
-          <img src={previewUrl} alt="상품 사진 미리보기" className="mt-3 h-40 w-full rounded object-cover" />
+          <img src={previewUrl} alt="상품 사진 미리보기" className="mt-3 h-40 w-full rounded-lg object-cover" />
         ) : (
-          <div className="mt-3 flex h-32 items-center justify-center rounded bg-gray-100 text-sm text-gray-500">
+          <div className="mt-3 flex h-32 items-center justify-center rounded-lg bg-surface-muted text-sm text-stone-500">
             <ImagePlus size={18} className="mr-2" aria-hidden="true" />
             사진 미리보기
           </div>
         )}
-        {selectedFile && <p className="mt-1 truncate text-xs text-gray-500">{selectedFile.name} · 저장 시 업로드</p>}
+        {selectedFile && <p className="mt-1 truncate text-xs text-stone-500">{selectedFile.name} · 저장 시 업로드</p>}
       </div>
 
       <div className="flex gap-2">
@@ -222,22 +225,24 @@ function ProductDraftForm({
           <button
             type="button"
             onClick={onCancel}
-            className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded border border-gray-300 font-semibold text-gray-700"
+            className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-lg border border-border-subtle bg-surface-card font-semibold text-brand-primary"
           >
             <X size={17} aria-hidden="true" />
             취소
           </button>
         )}
-        <button type="submit" className="min-h-12 flex-1 rounded bg-blue-700 px-3 font-bold text-white">
-          {submitLabel}
-        </button>
+        {!submitFormId && (
+          <button type="submit" className="min-h-12 flex-1 rounded-lg bg-brand-primary px-3 font-bold text-white active:bg-brand-primary-dark">
+            {submitLabel}
+          </button>
+        )}
       </div>
 
       {onDelete && (
         <button
           type="button"
           onClick={onDelete}
-          className="inline-flex min-h-11 w-full items-center justify-center gap-2 text-sm font-semibold text-red-700"
+          className="inline-flex min-h-11 w-full items-center justify-center gap-2 text-sm font-semibold text-status-danger"
         >
           <Trash2 size={16} aria-hidden="true" />
           상품 삭제
@@ -419,15 +424,16 @@ export default function AdminPage() {
 
   if (!user) {
     return (
-      <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center bg-white p-6">
-        <h1 className="mb-6 text-center text-2xl font-bold">사장님 로그인</h1>
+      <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center bg-surface-page p-6">
+        <section className="rounded-xl border border-border-subtle bg-surface-card p-6">
+        <h1 className="mb-6 text-center text-2xl font-bold text-brand-primary">사장님 로그인</h1>
         <form onSubmit={handleLogin} className="flex flex-col gap-4">
           <input
             type="email"
             placeholder="이메일"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            className="min-h-12 rounded border border-gray-300 px-3"
+            className="min-h-12 rounded-lg border border-border-subtle bg-surface-card px-3 focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
             required
           />
           <input
@@ -435,13 +441,14 @@ export default function AdminPage() {
             placeholder="비밀번호"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            className="min-h-12 rounded border border-gray-300 px-3"
+            className="min-h-12 rounded-lg border border-border-subtle bg-surface-card px-3 focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
             required
           />
-          <button type="submit" className="min-h-12 rounded bg-blue-700 font-bold text-white">
+          <button type="submit" className="min-h-12 rounded-lg bg-brand-primary font-bold text-white active:bg-brand-primary-dark">
             로그인
           </button>
         </form>
+        </section>
         {toast && (
           <p role="status" className="fixed left-1/2 top-4 z-50 -translate-x-1/2 rounded bg-red-700 px-4 py-3 text-sm text-white">
             {toast.message}
@@ -471,14 +478,20 @@ export default function AdminPage() {
           .sort((a, b) => a.localeCompare(b, 'ko')),
       ]
     : draftCategories.sort((a, b) => a.localeCompare(b, 'ko'));
-  const stockCategories = ['전체', ...orderedCategories, '품절'];
+  const stockCategories = ['전체', ...orderedCategories, '품절', '미노출'];
   const filteredStockItems = draftData.items
     .filter((item) => {
       const isSoldOut = item.isSoldOut === true || item.stock === 0;
       const matchesCategory = selectedStockCategory === '전체'
+        || selectedStockCategory === '미노출'
         || (selectedStockCategory === '품절' ? isSoldOut : item.category === selectedStockCategory);
+      const matchesVisibility = selectedStockCategory === '미노출'
+        ? !item.isVisible
+        : selectedStockCategory === '품절'
+          ? item.isVisible
+          : true;
       const matchesSearch = item.name.toLocaleLowerCase('ko').includes(stockSearchQuery.trim().toLocaleLowerCase('ko'));
-      return matchesCategory && matchesSearch;
+      return matchesCategory && matchesVisibility && matchesSearch;
     })
     .sort((a, b) => a.order - b.order);
   const editingItem = selectedItemId
@@ -486,36 +499,37 @@ export default function AdminPage() {
     : undefined;
 
   return (
-    <div className="mx-auto min-h-screen max-w-md bg-white pb-28 shadow-sm">
-      <div className="sticky top-0 z-20 bg-white">
-        <header className="flex min-h-14 items-center justify-between border-b border-gray-100 px-4">
-          <h1 className="text-lg font-bold text-gray-900">매장 관리</h1>
+    <div className="mx-auto min-h-screen max-w-md bg-surface-page pb-28 text-stone-900 shadow-sm">
+      <div className="sticky top-0 z-20 bg-brand-primary text-white shadow-sm">
+        <header className="flex min-h-16 items-center justify-between px-4 py-3">
+          <h1 className="text-xl font-bold">{STORE_CONFIG.adminTitle}</h1>
           <button
             type="button"
             onClick={handleLogout}
-            className="min-h-11 px-2 text-sm font-medium text-gray-600"
+            className="min-h-10 rounded-lg border border-white/30 px-3 py-1.5 text-sm font-semibold text-white"
           >
             로그아웃
           </button>
         </header>
-        <div className="border-b border-gray-100 px-4 py-2">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={isOpen}
-            aria-label="매장 영업 상태"
-            onClick={toggleDraftOpen}
-            className={`flex min-h-12 w-full items-center justify-between rounded-md px-4 text-sm font-bold ${
-              isOpen ? 'bg-emerald-50 text-emerald-800' : 'bg-gray-100 text-red-700'
-            }`}
-          >
-            <span>{isOpen ? '영업 중' : '영업 종료·휴무'}</span>
-            <span className={`relative h-7 w-12 rounded-full ${isOpen ? 'bg-emerald-600' : 'bg-gray-400'}`}>
-              <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${isOpen ? 'translate-x-6' : 'translate-x-1'}`} />
-            </span>
-          </button>
+        <div className="px-4 pb-4">
+          <div className="flex min-h-14 items-center justify-between gap-3 rounded-xl bg-brand-primary-light px-4 py-3">
+            <div className="flex min-w-0 items-center gap-3 text-sm font-semibold">
+              <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${isOpen ? 'bg-emerald-400' : 'bg-gray-400'}`} />
+              <span>{isOpen ? '현재 매장 영업 중' : '현재 영업 종료·휴무'}</span>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isOpen}
+              aria-label="매장 영업 상태"
+              onClick={toggleDraftOpen}
+              className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors ${isOpen ? 'bg-emerald-500' : 'bg-gray-500'}`}
+            >
+              <span className={`absolute left-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${isOpen ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          </div>
         </div>
-        <nav aria-label="관리 메뉴" className="flex border-b border-gray-200">
+        <nav aria-label="관리 메뉴" className="flex border-b border-border-subtle bg-surface-card text-stone-600">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -524,8 +538,8 @@ export default function AdminPage() {
               onClick={() => setActiveTab(tab.id)}
               className={`min-h-12 flex-1 border-b-2 px-2 text-sm ${
                 activeTab === tab.id
-                  ? 'border-blue-700 font-bold text-blue-800'
-                  : 'border-transparent text-gray-500'
+                  ? 'border-brand-primary font-bold text-brand-primary'
+                  : 'border-transparent text-stone-500'
               }`}
             >
               {tab.label}
@@ -534,7 +548,7 @@ export default function AdminPage() {
         </nav>
       </div>
 
-      <main className="p-4 pb-28">
+      <main className="bg-surface-page p-4 pb-40">
         {hasServerUpdate && (
           <section role="alert" className="mb-4 space-y-3 rounded-md border border-amber-300 bg-amber-50 p-3">
             <p className="text-sm font-semibold leading-5 text-amber-950">
@@ -545,7 +559,7 @@ export default function AdminPage() {
                 type="button"
                 onClick={handleLoadLatestData}
                 disabled={isSaving}
-                className="min-h-11 rounded border border-amber-700 bg-white px-2 text-xs font-semibold text-amber-900 disabled:opacity-50"
+                className="min-h-11 rounded-lg border border-border-subtle bg-surface-card px-2 text-xs font-semibold text-brand-primary disabled:opacity-50"
               >
                 최신 데이터 불러오기
               </button>
@@ -553,7 +567,7 @@ export default function AdminPage() {
                 type="button"
                 onClick={handleSaveChanges}
                 disabled={isSaving}
-                className="min-h-11 rounded bg-amber-800 px-2 text-xs font-semibold text-white disabled:opacity-50"
+                className="min-h-11 rounded-lg bg-brand-primary px-2 text-xs font-semibold text-white disabled:opacity-50"
               >
                 내 초안으로 덮어쓰기
               </button>
@@ -563,13 +577,13 @@ export default function AdminPage() {
         {activeTab === 'stock' ? (
           <section aria-labelledby="stock-heading" className="space-y-4">
             <div className="flex items-baseline justify-between">
-              <h2 id="stock-heading" className="text-lg font-bold text-gray-900">재고 관리</h2>
-              <span className="text-xs text-gray-500">{filteredStockItems.length}개 상품</span>
+              <h2 id="stock-heading" className="text-lg font-bold text-stone-900">재고 관리</h2>
+              <span className="text-xs text-stone-500">{filteredStockItems.length}개 상품</span>
             </div>
 
             <nav
               aria-label="재고 카테고리 필터"
-              className="-mx-4 flex gap-2 overflow-x-auto whitespace-nowrap border-b border-gray-100 px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="-mx-4 flex gap-2 overflow-x-auto whitespace-nowrap px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
               {stockCategories.map((category) => (
                 <button
@@ -577,10 +591,16 @@ export default function AdminPage() {
                   type="button"
                   aria-pressed={selectedStockCategory === category}
                   onClick={() => setSelectedStockCategory(category)}
-                  className={`min-h-11 shrink-0 border-b-2 px-2 text-sm font-semibold ${
-                    selectedStockCategory === category
-                      ? 'border-blue-700 text-blue-800'
-                      : 'border-transparent text-gray-500'
+                  className={`min-h-11 shrink-0 rounded-lg border px-4 text-sm font-semibold ${
+                    category === '품절'
+                      ? 'border-status-danger bg-surface-card text-status-danger'
+                      : category === '미노출'
+                        ? selectedStockCategory === category
+                          ? 'border-stone-600 bg-stone-600 text-white'
+                          : 'border-stone-400 bg-surface-card text-stone-700'
+                      : selectedStockCategory === category
+                        ? 'border-brand-primary bg-brand-primary text-white'
+                        : 'border-border-subtle bg-surface-card text-stone-700'
                   }`}
                 >
                   {category}
@@ -588,30 +608,20 @@ export default function AdminPage() {
               ))}
             </nav>
 
-            <label className="flex min-h-11 items-center gap-2 rounded border border-gray-300 bg-white px-3 focus-within:border-blue-600">
-              <Search size={18} className="shrink-0 text-gray-500" aria-hidden="true" />
+            <label className="flex min-h-12 items-center gap-2 rounded-xl border border-border-subtle bg-surface-card px-3.5 focus-within:border-brand-primary focus-within:ring-1 focus-within:ring-brand-primary">
+              <Search size={18} className="shrink-0 text-stone-500" aria-hidden="true" />
               <input
                 type="search"
                 value={stockSearchQuery}
                 onChange={(event) => setStockSearchQuery(event.target.value)}
-                placeholder="상품명 검색"
+                placeholder="상품명 빠른 검색"
                 aria-label="상품명 검색"
-                className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-gray-400"
+                className="min-w-0 flex-1 bg-transparent text-sm text-stone-900 outline-none placeholder:text-stone-400"
               />
-              {stockSearchQuery && (
-                <button
-                  type="button"
-                  aria-label="검색어 전체 삭제"
-                  onClick={() => setStockSearchQuery('')}
-                  className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-gray-500 active:bg-gray-100"
-                >
-                  <X size={17} aria-hidden="true" />
-                </button>
-              )}
             </label>
 
             {filteredStockItems.length === 0 ? (
-              <p className="rounded border border-gray-200 bg-gray-50 px-4 py-10 text-center text-sm text-gray-500">
+                <p className="rounded-xl border border-border-subtle bg-surface-card px-4 py-10 text-center text-sm text-stone-500">
                 조건에 맞는 상품이 없습니다.
               </p>
             ) : (
@@ -620,45 +630,53 @@ export default function AdminPage() {
                   const isSoldOut = item.isSoldOut === true || item.stock === 0;
 
                   return (
-                    <li key={item.id} className="rounded border border-gray-200 bg-white p-3">
+                    <li key={item.id} className={`rounded-xl border bg-surface-card p-4 ${isSoldOut && item.isVisible ? 'border-status-danger/30' : 'border-border-subtle'}`}>
                       <div className="flex items-center gap-3">
                         <img
                           src={item.imageUrl}
                           alt=""
-                          className="h-16 w-16 shrink-0 rounded object-cover"
+                          className="h-[52px] w-[52px] shrink-0 rounded-lg object-cover"
                         />
                         <div className="min-w-0 flex-1">
                           <div className="mb-1 flex flex-wrap items-center gap-1.5">
-                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                            <span className="rounded-lg bg-surface-muted px-2 py-1 text-xs font-medium text-stone-600">
                               {item.category}
                             </span>
                             {!item.isVisible && (
-                              <span className="rounded bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-600">
-                                숨김 상태
+                              <span className="rounded-lg bg-stone-100 px-2 py-1 text-xs font-semibold text-stone-700">
+                                미노출
                               </span>
                             )}
-                            {isSoldOut && (
-                              <span className="rounded bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
-                                품절
+                            {isSoldOut && item.isVisible && (
+                              <span className="rounded-lg bg-red-50 px-2 py-1 text-xs font-semibold text-status-danger">
+                                품절 노출중
                               </span>
                             )}
                           </div>
-                          <h3 className="truncate font-semibold text-gray-900">{item.name}</h3>
-                          <p className="mt-0.5 text-sm text-gray-600">{item.price.toLocaleString('ko-KR')}원</p>
+                          <h3 className="truncate font-semibold text-stone-900">{item.name}</h3>
+                          <p className="mt-0.5 text-sm text-stone-600">{item.price.toLocaleString('ko-KR')}원</p>
                         </div>
+                        <button
+                          type="button"
+                          aria-label={item.isVisible ? `${item.name} 미노출로 전환` : `${item.name} 노출로 전환`}
+                          aria-pressed={!item.isVisible}
+                          onClick={() => updateDraftItem({ ...item, isVisible: !item.isVisible })}
+                          className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg border ${item.isVisible ? 'border-border-subtle text-stone-500' : 'border-stone-400 bg-stone-100 text-stone-700'}`}
+                        >
+                          {item.isVisible ? <Eye size={19} aria-hidden="true" /> : <EyeOff size={19} aria-hidden="true" />}
+                        </button>
                       </div>
 
-                      <div className="mt-3 grid grid-cols-[3rem_minmax(0,1fr)_3rem] gap-2">
+                      {item.isVisible && <div className="mt-3 flex items-center gap-2 rounded-xl bg-surface-muted p-2">
                         <button
                           type="button"
                           aria-label={`${item.name} 수량 1 감소`}
                           onClick={() => updateDraftStock(item.id, Math.max(0, item.stock - 1))}
-                          className="min-h-11 rounded border border-gray-300 bg-white text-lg font-bold text-gray-800 active:bg-gray-100"
+                          className="h-11 w-12 shrink-0 rounded-lg border border-border-subtle bg-surface-card text-lg font-bold text-brand-primary active:bg-surface-page"
                         >
                           -1
                         </button>
-                        <label className="flex min-h-11 items-center justify-center gap-2 rounded border border-gray-300 px-2">
-                          <span className="shrink-0 text-xs text-gray-500">수량</span>
+                        <label className="flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-lg border border-border-subtle bg-surface-card px-2">
                           <input
                             type="number"
                             min="0"
@@ -670,41 +688,43 @@ export default function AdminPage() {
                               const parsedStock = Number.parseInt(event.target.value, 10);
                               updateDraftStock(item.id, Number.isNaN(parsedStock) ? 0 : Math.max(0, parsedStock));
                             }}
-                            className="min-w-0 w-full bg-transparent text-center font-semibold outline-none"
+                            className="min-w-0 w-full bg-transparent text-center text-lg font-bold outline-none focus:text-brand-primary"
                           />
-                          <span className="shrink-0 text-xs text-gray-500">개</span>
+                          <span className="shrink-0 text-lg font-bold text-stone-800">개</span>
                         </label>
                         <button
                           type="button"
                           aria-label={`${item.name} 수량 1 증가`}
                           onClick={() => updateDraftStock(item.id, item.stock + 1)}
-                          className="min-h-11 rounded bg-blue-700 text-lg font-bold text-white active:bg-blue-800"
+                          className="h-11 w-12 shrink-0 rounded-lg bg-brand-primary text-lg font-bold text-white active:bg-brand-primary-dark"
                         >
                           +1
                         </button>
-                      </div>
+                      </div>}
 
-                      <div className="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={item.isSoldOut}
-                          aria-label={`${item.name} 품절 상태`}
-                          onClick={() => toggleDraftSoldOut(item.id)}
-                          className="inline-flex min-h-11 items-center gap-2 rounded px-2 text-sm font-medium text-gray-700 active:bg-gray-50"
-                        >
-                          <span className={`relative h-6 w-11 rounded-full ${item.isSoldOut ? 'bg-red-600' : 'bg-gray-300'}`}>
-                            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${item.isSoldOut ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                      <div className="flex items-center justify-between gap-3 pt-2">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={item.isSoldOut}
+                            aria-label={`${item.name} 품절 상태`}
+                            onClick={() => toggleDraftSoldOut(item.id)}
+                            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${item.isSoldOut ? 'bg-status-danger' : 'bg-stone-300'}`}
+                          >
+                            <span className={`absolute left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${item.isSoldOut ? 'translate-x-5' : 'translate-x-0'}`} />
+                          </button>
+                          <span className={`truncate text-sm font-semibold ${item.isSoldOut ? 'text-status-danger' : 'text-stone-600'}`}>
+                            {item.isSoldOut ? '수량 유지 품절' : '정상 판매 중'}
                           </span>
-                          {item.isSoldOut ? '품절' : '판매 중'}
-                        </button>
+                        </div>
                         <button
                           type="button"
                           aria-pressed={selectedItemId === item.id}
                           onClick={() => setSelectedItemId(item.id)}
-                          className={`min-h-11 rounded border px-4 text-sm font-semibold ${selectedItemId === item.id ? 'border-blue-700 bg-blue-50 text-blue-800' : 'border-gray-300 text-gray-700'}`}
+                          className={`min-h-11 shrink-0 rounded-lg border px-4 text-sm font-semibold ${selectedItemId === item.id ? 'border-brand-primary bg-surface-muted text-brand-primary' : 'border-border-subtle bg-surface-card text-brand-primary'}`}
                         >
-                          편집
+                          정보 편집
                         </button>
                       </div>
                     </li>
@@ -732,21 +752,21 @@ export default function AdminPage() {
                   rows={7}
                   maxLength={1000}
                   autoFocus
-                  className="min-h-40 w-full resize-y rounded border border-gray-300 p-3 text-sm leading-6 focus:border-blue-600 focus:outline-none"
+                  className="min-h-40 w-full resize-y rounded-xl border border-border-subtle bg-surface-card p-3 text-sm leading-6 focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary"
                   placeholder="고객에게 전달할 공지사항을 입력하세요."
                 />
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={handleNoticeCancel}
-                    className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded border border-gray-300 font-semibold text-gray-700"
+                    className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-lg border border-border-subtle bg-surface-card font-semibold text-brand-primary"
                   >
                     <X size={17} aria-hidden="true" />
                     취소
                   </button>
                   <button
                     type="submit"
-                    className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded bg-blue-700 font-bold text-white"
+                    className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-lg bg-brand-primary font-bold text-white active:bg-brand-primary-dark"
                   >
                     <Check size={17} aria-hidden="true" />
                     초안에 반영
@@ -755,13 +775,13 @@ export default function AdminPage() {
               </form>
             ) : (
               <div className="space-y-3">
-                <div className="min-h-32 whitespace-pre-wrap break-words rounded border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-gray-800">
+                <div className="min-h-32 whitespace-pre-wrap break-words rounded-xl border border-border-subtle bg-surface-card p-4 text-sm leading-6 text-stone-800">
                   {draftData.notice || '등록된 공지사항이 없습니다.'}
                 </div>
                 <button
                   type="button"
                   onClick={handleNoticeEdit}
-                  className="min-h-12 w-full rounded border border-blue-700 font-semibold text-blue-800 active:bg-blue-50"
+                  className="min-h-12 w-full rounded-lg border border-brand-primary font-semibold text-brand-primary active:bg-surface-muted"
                 >
                   편집
                 </button>
@@ -771,13 +791,14 @@ export default function AdminPage() {
         ) : activeTab === 'register' ? (
           <section aria-labelledby="register-heading" className="space-y-4">
             <div>
-              <h2 id="register-heading" className="text-lg font-bold text-gray-900">새 상품 등록</h2>
-              <p className="mt-1 text-sm text-gray-500">등록 내용과 사진은 초안에 반영되며, 하단 저장 버튼을 눌러야 반영됩니다.</p>
+              <h2 id="register-heading" className="text-lg font-bold text-stone-900">새 상품 등록</h2>
+              <p className="mt-1 text-sm text-stone-500">등록 내용과 사진은 초안에 반영되며, 하단 저장 버튼을 눌러야 반영됩니다.</p>
             </div>
             <ProductDraftForm
               key={registerFormVersion}
               categories={draftCategories}
               submitLabel="초안에 추가"
+              submitFormId="register-product-form"
               onSubmit={handleRegisterProduct}
             />
           </section>
@@ -795,15 +816,15 @@ export default function AdminPage() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="edit-product-heading"
-            className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-lg bg-white p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:rounded-lg"
+            className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-xl border border-border-subtle bg-surface-card p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:rounded-xl"
           >
             <div className="mb-4 flex items-center justify-between">
-              <h2 id="edit-product-heading" className="text-lg font-bold">상품 편집</h2>
+              <h2 id="edit-product-heading" className="text-lg font-bold text-brand-primary">상품 편집</h2>
               <button
                 type="button"
                 aria-label="편집 모달 닫기"
                 onClick={() => setSelectedItemId(null)}
-                className="grid h-11 w-11 place-items-center rounded-full text-gray-600 active:bg-gray-100"
+                className="grid h-11 w-11 place-items-center rounded-full text-stone-600 active:bg-surface-muted"
               >
                 <X size={20} aria-hidden="true" />
               </button>
@@ -823,36 +844,49 @@ export default function AdminPage() {
         </div>
       )}
 
-      {hasChanges && (
-        <footer className="fixed bottom-0 left-0 right-0 z-30 border-t border-gray-200 bg-white/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
-          <div className="mx-auto flex max-w-md gap-2">
-            <button
-              type="button"
-              onClick={handleDiscardChanges}
-              disabled={isSaving}
-              className="inline-flex min-h-12 shrink-0 items-center justify-center gap-1 rounded border border-gray-300 px-3 text-sm font-semibold text-gray-700 disabled:opacity-50"
-            >
-              <X size={16} aria-hidden="true" />
-              초안 버리기
-            </button>
-            <button
-              type="button"
-              onClick={handleSaveChanges}
-              disabled={isSaving}
-              className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded bg-blue-700 px-3 font-bold text-white disabled:cursor-wait disabled:opacity-60"
-            >
-              {isSaving ? (
-                <>
-                  <LoaderCircle size={18} className="animate-spin" aria-hidden="true" />
-                  저장 중...
-                </>
-              ) : (
-                <>
-                  <Save size={18} aria-hidden="true" />
-                  변경사항 저장하기
-                </>
-              )}
-            </button>
+      {(activeTab === 'register' || hasChanges) && (
+        <footer className="fixed bottom-0 left-0 right-0 z-30 border-t border-border-subtle bg-surface-card px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-lg">
+          <div className="mx-auto flex max-w-md flex-col gap-2">
+            {activeTab === 'register' && (
+              <button
+                type="submit"
+                form="register-product-form"
+                className="inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-brand-primary px-3 font-bold text-white active:bg-brand-primary-dark"
+              >
+                초안에 추가
+              </button>
+            )}
+            {hasChanges && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleDiscardChanges}
+                  disabled={isSaving}
+                  className="inline-flex min-h-12 shrink-0 items-center justify-center gap-1 rounded-lg border border-border-subtle bg-surface-card px-3 text-sm font-semibold text-brand-primary disabled:opacity-50"
+                >
+                  <X size={16} aria-hidden="true" />
+                  초안 버리기
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveChanges}
+                  disabled={isSaving}
+                  className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-lg bg-brand-primary px-3 font-bold text-white active:bg-brand-primary-dark disabled:cursor-wait disabled:opacity-60"
+                >
+                  {isSaving ? (
+                    <>
+                      <LoaderCircle size={18} className="animate-spin" aria-hidden="true" />
+                      저장 중...
+                    </>
+                  ) : (
+                    <>
+                      <Save size={18} aria-hidden="true" />
+                      변경사항 저장하기
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </footer>
       )}
