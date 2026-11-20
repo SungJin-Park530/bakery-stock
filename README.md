@@ -3,6 +3,11 @@
 ## 프로젝트 개요
 빵집의 당일 상품과 재고를 손님에게 실시간으로 안내하고, 매장 관리자가 상품 및 매장 정보를 웹에서 관리할 수 있는 모바일 중심 웹 애플리케이션입니다.
 
+## 서비스 접속 방법
+스마트폰 카메라로 아래 QR 코드를 스캔하면 서비스에 접속할 수 있습니다.
+
+![서비스 접속 QR 코드](readme_asset/qrcode.png)
+
 ## 시연 영상 및 화면
 - 서비스 URL: [작성 필요]
 - 시연 영상: [작성 필요]
@@ -18,12 +23,14 @@
 - Firestore 변경 사항을 실시간으로 반영하며, 브라우저 탭이 숨겨지면 실시간 구독을 중지합니다.
 
 ## 기술 스택
-- 프론트엔드: React 19, TypeScript, Vite
-- 스타일링: Tailwind CSS v4
-- 라우팅: React Router의 HashRouter
-- 데이터베이스 및 인증: Firebase Firestore, Firebase Authentication
-- 이미지 처리 및 호스팅: HTML Canvas, Cloudinary unsigned upload
-- 배포: GitHub Pages, GitHub Actions
+| 구분 | 기술 |
+| --- | --- |
+| 프론트엔드 | React 19, TypeScript, Vite |
+| 스타일링 | Tailwind CSS v4 |
+| 라우팅 | React Router의 HashRouter |
+| 데이터베이스 및 인증 | Firebase Firestore, Firebase Authentication |
+| 이미지 처리 및 호스팅 | HTML Canvas, Cloudinary unsigned upload |
+| 배포 | GitHub Pages, GitHub Actions |
 
 ## 서비스 아키텍처
 고객과 관리자는 GitHub Pages에 배포된 SPA에 접속합니다. 앱은 Firebase Authentication으로 관리자 로그인 상태를 확인하고, Firestore의 단일 `store/menu_data` 문서에서 상품과 매장 데이터를 읽고 씁니다. 상품 이미지는 브라우저에서 가로 최대 400px, WebP 품질 0.75로 변환한 뒤 Cloudinary에 업로드하고, 반환된 이미지 URL을 Firestore 데이터에 저장합니다.

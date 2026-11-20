@@ -6,6 +6,7 @@ on:
     paths-ignore:
       - 'README.md'
       - '.github/copilot-instructions.md'
+      - 'readme_asset/**'
 
 permissions:
   contents: read
