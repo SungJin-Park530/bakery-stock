@@ -861,7 +861,9 @@ export default function AdminPage({ isEducationFontEnabled, onEducationFontChang
                     onClick={() => setSelectedStockCategory(category)}
                     className={`min-h-11 shrink-0 rounded-lg border px-4 text-sm font-semibold ${
                       category === '품절'
-                        ? 'border-status-danger bg-surface-card text-status-danger'
+                        ? selectedStockCategory === category
+                          ? 'border-status-danger bg-status-danger text-white'
+                          : 'border-status-danger bg-surface-card text-status-danger'
                         : category === '미노출'
                           ? selectedStockCategory === category
                             ? 'border-brand-secondary bg-brand-secondary text-white'
