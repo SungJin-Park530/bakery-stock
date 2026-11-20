@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useStoreData } from '../hooks/useStoreData';
 import { STORE_CONFIG } from '../config/storeConfig';
 import defaultProductImage from '../assets/defaultimg.webp';
-import { Bell, Check, ChevronDown, Copy, MessageCircle, RotateCcw, Search, X } from 'lucide-react';
+import { Bell, Check, ChevronDown, Copy, Menu, MessageCircle, RotateCcw, Search, X } from 'lucide-react';
+
+interface CustomerPageProps {
+  isEducationFontEnabled: boolean;
+  onEducationFontChange: (enabled: boolean) => void;
+}
 
 function formatUpdatedAt(value: string) {
   const updatedAt = new Date(value);
@@ -39,7 +44,7 @@ function formatUpdatedAt(value: string) {
   return `${date} ${time} 업데이트`;
 }
 
-export default function CustomerPage() {
+export default function CustomerPage({ isEducationFontEnabled, onEducationFontChange }: CustomerPageProps) {
   const { serverData, storeData, loading, error } = useStoreData();
   const customerData = serverData ?? storeData;
   const [isNoticeExpanded, setIsNoticeExpanded] = useState(false);
@@ -50,7 +55,10 @@ export default function CustomerPage() {
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('전체');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const noticeContentRef = useRef<HTMLSpanElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const menuPopupRef = useRef<HTMLElement>(null);
 
   const copyOrderGuide = async () => {
     try {
@@ -73,6 +81,27 @@ export default function CustomerPage() {
       setIsOrderGuideCopied(false);
     }
   };
+
+  useEffect(() => {
+    if (!isMenuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (menuButtonRef.current?.contains(target) || menuPopupRef.current?.contains(target)) return;
+      setIsMenuOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsMenuOpen(false);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isMenuOpen]);
 
   useEffect(() => {
     const content = noticeContentRef.current;
@@ -141,22 +170,60 @@ export default function CustomerPage() {
 
   return (
     <div className="mx-auto min-h-screen max-w-md bg-surface-page pb-8 text-stone-900 shadow-sm">
-      <header className="sticky top-0 z-20 bg-brand-primary text-white shadow-sm">
+      <header className="sticky top-0 z-20 bg-surface-header text-brand-primary shadow-sm">
         <div className="px-5 pb-5 pt-5">
-          <div className="flex items-center justify-between gap-3">
+          <div className="relative flex items-center justify-between gap-3">
             <p className="rounded-md bg-brand-accent px-3 py-1.5 text-sm font-bold text-white">
               {STORE_CONFIG.badgeText}
             </p>
-            <span className="shrink-0 text-right text-xs text-white/70">
-              {formatUpdatedAt(customerData.updatedAt)}
-            </span>
+            <div className="flex min-w-0 items-center justify-end gap-2">
+              <span className="min-w-0 text-right text-[11px] leading-4 text-stone-600">
+                {formatUpdatedAt(customerData.updatedAt)}
+              </span>
+              <button
+                ref={menuButtonRef}
+                type="button"
+                aria-label={isMenuOpen ? '메뉴 닫기' : '메뉴 열기'}
+                aria-expanded={isMenuOpen}
+                onClick={() => setIsMenuOpen((open) => !open)}
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-brand-primary/20 text-brand-primary"
+              >
+                {isMenuOpen ? <X size={21} aria-hidden="true" /> : <Menu size={23} aria-hidden="true" />}
+              </button>
+            </div>
+            {isMenuOpen && (
+              <section
+                ref={menuPopupRef}
+                className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-72 rounded-xl border border-border-subtle bg-surface-card p-3 text-stone-800 shadow-xl"
+              >
+                <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-2 py-3">
+                  <span className="text-sm font-semibold">강원교육모두체</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isEducationFontEnabled}
+                    aria-label="강원교육모두체 사용"
+                    onClick={() => onEducationFontChange(!isEducationFontEnabled)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full ${isEducationFontEnabled ? 'bg-brand-primary' : 'bg-stone-300'}`}
+                  >
+                    <span className={`absolute left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${isEducationFontEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+                <div className="px-2 pt-3 text-[10px] leading-4 text-stone-500">
+                  <p>Font: 강원교육모두체</p>
+                  <p>Copyright: 강원특별자치도교육청</p>
+                  <p className="break-all">Source: https://noonnu.cc/font_page/802</p>
+                  <p className="mt-1">© 2026 {STORE_CONFIG.storeName}. All rights reserved.</p>
+                </div>
+              </section>
+            )}
           </div>
           <h1 className="mt-4 whitespace-nowrap text-2xl font-bold leading-tight">
             {STORE_CONFIG.storeName}
           </h1>
 
           {customerData.notice.trim() && (
-            <section className="mt-5 rounded-lg border border-white/10 bg-brand-primary-dark text-sm leading-5 text-white">
+            <section className="mt-5 rounded-lg border border-border-subtle bg-surface-card text-sm leading-5 text-brand-primary">
               <button
                 type="button"
                 aria-label={isNoticeExpanded ? '공지사항 접기' : '공지사항 펼치기'}
@@ -214,7 +281,7 @@ export default function CustomerPage() {
                   onClick={() => setSelectedCategory(category)}
                   className={`min-h-11 shrink-0 border-b-2 px-2 text-sm ${
                     selectedCategory === category
-                      ? 'border-brand-primary font-bold text-brand-primary'
+                      ? 'border-brand-secondary font-bold text-brand-secondary'
                       : 'border-transparent font-semibold text-stone-500'
                   }`}
                 >
@@ -343,7 +410,7 @@ export default function CustomerPage() {
       </footer>
       {selectedProduct && (
         <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4"
+          className="fixed inset-0 z-40 flex items-center justify-center bg-[#07140d]/80 p-4 backdrop-blur-[2px]"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setSelectedProductId(null);
           }}
@@ -352,40 +419,59 @@ export default function CustomerPage() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="product-detail-title"
-            className="flex max-h-[85dvh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-surface-card shadow-xl"
+            className="flex max-h-[88dvh] w-full max-w-sm flex-col overflow-hidden rounded-lg bg-surface-card shadow-2xl"
           >
-            <header className="sticky top-0 z-10 flex min-h-14 shrink-0 items-center justify-between border-b border-border-subtle bg-surface-card px-4">
-              <h2 id="product-detail-title" className="truncate pr-3 text-lg font-bold text-brand-primary">
+            <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 bg-surface-header px-4 text-brand-primary">
+              <h2 id="product-detail-title" className="truncate pr-2 text-base font-bold">
                 {selectedProduct.name}
               </h2>
               <button
                 type="button"
                 aria-label="상품 상세 닫기"
                 onClick={() => setSelectedProductId(null)}
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-stone-600 active:bg-surface-muted"
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-brand-primary/5 text-brand-primary active:bg-brand-primary/10"
               >
                 <X size={20} aria-hidden="true" />
               </button>
             </header>
-            <div className="min-h-0 overflow-y-auto">
+            <div className="min-h-0 overflow-y-auto p-4">
               <img
                 src={selectedProduct.imageUrl || defaultProductImage}
                 alt={selectedProduct.name}
-                className="aspect-square w-full object-contain"
+                className="aspect-square w-full rounded-md object-cover"
               />
-              <div className="space-y-3 p-5">
-                <span className="inline-flex rounded-lg bg-surface-muted px-2.5 py-1 text-xs font-semibold text-stone-600">
-                  {selectedProduct.category}
-                </span>
-                <h3 className="text-xl font-bold text-stone-900">{selectedProduct.name}</h3>
-                <p className="text-lg font-semibold text-stone-800">
+              <div className="pt-4">
+                <div className="flex flex-wrap gap-2">
+                  <span className="inline-flex rounded bg-surface-muted px-2.5 py-1 text-xs font-semibold text-stone-600">
+                    {selectedProduct.category}
+                  </span>
+                  {(selectedProduct.isSoldOut === true || selectedProduct.stock === 0) && (
+                    <span className="inline-flex rounded bg-status-soldout-bg px-2.5 py-1 text-xs font-bold text-status-soldout">
+                      품절
+                    </span>
+                  )}
+                </div>
+                <h3 className="mt-3 text-xl font-bold text-stone-900">{selectedProduct.name}</h3>
+                <div className="mt-2 flex items-center justify-between gap-3 text-lg font-bold text-stone-800">
+                  <span>가격</span>
+                  <span>
                   {selectedProduct.price.toLocaleString('ko-KR')}원
-                </p>
-                {selectedProduct.isSoldOut === true || selectedProduct.stock === 0 ? (
-                  <p className="text-sm font-bold text-status-soldout">품절</p>
-                ) : (
-                  <p className="text-sm text-stone-600">남은 수량 {selectedProduct.stock}개</p>
-                )}
+                  </span>
+                </div>
+                <div
+                  className={`mt-5 flex min-h-[72px] items-center justify-between rounded-md px-4 ${
+                    selectedProduct.isSoldOut === true || selectedProduct.stock === 0
+                      ? 'bg-status-soldout-bg text-status-soldout'
+                      : 'bg-brand-primary text-white'
+                  }`}
+                >
+                  <span className="text-sm font-semibold opacity-80">남은 수량</span>
+                  <span className="text-2xl font-bold leading-none">
+                    {selectedProduct.isSoldOut === true || selectedProduct.stock === 0
+                      ? '품절'
+                      : `${selectedProduct.stock}개`}
+                  </span>
+                </div>
               </div>
             </div>
           </section>

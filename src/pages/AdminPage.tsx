@@ -15,6 +15,11 @@ type ProductFormValues = Omit<ProductItem, 'id' | 'imageUrl' | 'order'>;
 const NEW_CATEGORY_OPTION = '__new_category__';
 const DRAFT_MODE_STORAGE_KEY = 'bakery-stock-admin-draft-mode';
 
+interface AdminPageProps {
+  isEducationFontEnabled: boolean;
+  onEducationFontChange: (enabled: boolean) => void;
+}
+
 function createProductId() {
   const randomId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
@@ -288,7 +293,7 @@ function ProductDraftForm({
   );
 }
 
-export default function AdminPage() {
+export default function AdminPage({ isEducationFontEnabled, onEducationFontChange }: AdminPageProps) {
   const [user, setUser] = useState(auth.currentUser);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -710,14 +715,14 @@ export default function AdminPage() {
   return (
     <div className="mx-auto min-h-screen max-w-md bg-surface-page pb-28 text-stone-900 shadow-sm">
       <div className="sticky top-0 z-40 shadow-sm">
-        <header className="relative flex h-16 items-center justify-between bg-brand-primary px-4 text-white">
+        <header className="relative flex h-16 items-center justify-between bg-surface-header px-4 text-brand-primary">
           <div className="flex min-w-0 items-center gap-2.5">
             <h1 className="truncate text-xl font-bold">{STORE_CONFIG.adminTitle}</h1>
             <span
               aria-label={isOpen ? '현재 매장 영업 중' : '현재 영업 종료·휴무'}
-              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/20 px-2 py-1 text-[11px] font-semibold ${isOpen ? 'text-emerald-100' : 'text-white/70'}`}
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border border-brand-primary/15 px-2 py-1 text-[11px] font-semibold ${isOpen ? 'text-brand-secondary' : 'text-stone-500'}`}
             >
-              <span className={`h-1.5 w-1.5 rounded-full ${isOpen ? 'bg-emerald-400' : 'bg-stone-400'}`} />
+              <span className={`h-1.5 w-1.5 rounded-full ${isOpen ? 'bg-brand-accent' : 'bg-stone-400'}`} />
               {isOpen ? '영업 중' : '휴무'}
             </span>
           </div>
@@ -727,7 +732,7 @@ export default function AdminPage() {
             aria-label={isMenuOpen ? '관리 메뉴 닫기' : '관리 메뉴 열기'}
             aria-expanded={isMenuOpen}
             onClick={() => setIsMenuOpen((open) => !open)}
-            className="grid h-11 w-11 place-items-center rounded-lg border border-white/25 text-2xl leading-none text-white"
+            className="grid h-11 w-11 place-items-center rounded-lg border border-brand-primary/20 text-2xl leading-none text-brand-primary"
           >
             {isMenuOpen ? <X size={21} aria-hidden="true" /> : <Menu size={23} aria-hidden="true" />}
           </button>
@@ -762,6 +767,19 @@ export default function AdminPage() {
                   <span className={`absolute left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${isDraftMode ? 'translate-x-5' : 'translate-x-0'}`} />
                 </button>
               </div>
+              <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-2 py-3">
+                <span className="text-sm font-semibold">강원교육모두체</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={isEducationFontEnabled}
+                  aria-label="강원교육모두체 사용"
+                  onClick={() => onEducationFontChange(!isEducationFontEnabled)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full ${isEducationFontEnabled ? 'bg-brand-primary' : 'bg-stone-300'}`}
+                >
+                  <span className={`absolute left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${isEducationFontEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={handleLogout}
@@ -769,6 +787,12 @@ export default function AdminPage() {
               >
                 로그아웃
               </button>
+              <div className="border-t border-border-subtle px-2 pt-3 text-[10px] leading-4 text-stone-500">
+                <p>Font: 강원교육모두체</p>
+                <p>Copyright: 강원특별자치도교육청</p>
+                <p className="break-all">Source: https://noonnu.cc/font_page/802</p>
+                <p className="mt-1">© 2026 {STORE_CONFIG.storeName}. All rights reserved.</p>
+              </div>
             </section>
           )}
         </header>
@@ -781,7 +805,7 @@ export default function AdminPage() {
               onClick={() => setActiveTab(tab.id)}
                 className={`h-12 flex-1 border-b-2 px-2 text-sm ${
                 activeTab === tab.id
-                  ? 'border-brand-primary font-bold text-brand-primary'
+                  ? 'border-brand-secondary font-bold text-brand-secondary'
                   : 'border-transparent text-stone-500'
               }`}
             >
@@ -840,10 +864,10 @@ export default function AdminPage() {
                         ? 'border-status-danger bg-surface-card text-status-danger'
                         : category === '미노출'
                           ? selectedStockCategory === category
-                            ? 'border-stone-600 bg-stone-600 text-white'
+                            ? 'border-brand-secondary bg-brand-secondary text-white'
                             : 'border-stone-400 bg-surface-card text-stone-700'
                           : selectedStockCategory === category
-                            ? 'border-brand-primary bg-brand-primary text-white'
+                            ? 'border-brand-secondary bg-brand-secondary text-white'
                             : 'border-border-subtle bg-surface-card text-stone-700'
                     }`}
                   >
@@ -893,7 +917,7 @@ export default function AdminPage() {
                               </span>
                             )}
                             {isSoldOut && item.isVisible && (
-                              <span className="rounded-lg bg-red-50 px-2 py-1 text-xs font-semibold text-status-danger">
+                              <span className="rounded-lg bg-status-soldout-bg px-2 py-1 text-xs font-semibold text-status-danger">
                                 품절 노출중
                               </span>
                             )}

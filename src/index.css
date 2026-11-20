@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+@font-face {
+	font-family: GangwonEduAll;
+	src: url('/fonts/강원교육모두-Light.woff') format('woff');
+	font-style: normal;
+	font-weight: 300;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: GangwonEduAll;
+	src: url('/fonts/강원교육모두-Bold.woff') format('woff');
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+}
+
 @media (max-width: 767px) {
 	input,
 	textarea,
@@ -9,14 +25,27 @@
 }
 
 @theme {
-	--color-brand-primary: #1B3B2B;
-	--color-brand-primary-dark: #132A1E;
-	--color-brand-primary-light: #244B37;
-	--color-brand-accent: #D97706;
-	--color-surface-page: #F4F5F0;
-	--color-surface-card: #FFFFFF;
-	--color-surface-muted: #F9FAF7;
-	--color-border-subtle: #E2E5DC;
-	--color-status-soldout: #991B1B;
-	--color-status-danger: #DC2626;
+	--color-brand-primary: #49372B;
+	--color-brand-primary-dark: #38291F;
+	--color-brand-primary-light: #604A3A;
+	--color-brand-secondary: #8A5A3B;
+	--color-brand-accent: #B86B3D;
+	--color-surface-page: #FAF6EE;
+	--color-surface-card: #FFFDF8;
+	--color-surface-muted: #F3EBDD;
+	--color-surface-header: #E9DDCA;
+	--color-border-subtle: #E2D5C2;
+	--color-status-soldout: #B94A3A;
+	--color-status-danger: #B94A3A;
+	--color-status-soldout-bg: #F8EAE5;
+	--color-stone-900: #49372B;
+	--color-stone-800: #574235;
+	--color-stone-700: #6B5546;
+	--color-stone-600: #806C5D;
+	--color-stone-500: #927F70;
+	--color-stone-400: #A99A8D;
+	--color-stone-300: #D2C5B5;
+	--color-stone-100: #F2EBDD;
+	--color-gray-900: #49372B;
+	--color-gray-500: #927F70;
 }
