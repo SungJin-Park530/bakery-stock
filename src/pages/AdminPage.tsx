@@ -3,6 +3,7 @@ import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebas
 import { Check, Eye, EyeOff, LoaderCircle, Menu, Save, Search, Trash2, X } from 'lucide-react';
 import { STORE_CONFIG } from '../config/storeConfig';
 import defaultProductImage from '../assets/defaultimg.webp';
+import ImageCropModal from '../components/ImageCropModal';
 import { auth } from '../lib/firebaseAuth';
 import { useStoreData } from '../hooks/useStoreData';
 import type { ProductItem, StoreData } from '../types/bakery';
@@ -15,7 +16,10 @@ const NEW_CATEGORY_OPTION = '__new_category__';
 const DRAFT_MODE_STORAGE_KEY = 'bakery-stock-admin-draft-mode';
 
 function createProductId() {
-  return `item_${crypto.randomUUID()}`;
+  const randomId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  return `item_${randomId}`;
 }
 
 interface ProductDraftFormProps {
@@ -23,6 +27,7 @@ interface ProductDraftFormProps {
   initialItem?: ProductItem;
   submitLabel: string;
   submitFormId?: string;
+  formRef?: React.RefObject<HTMLFormElement | null>;
   onSubmit: (values: ProductFormValues, imageFile?: File, previewUrl?: string) => void;
   onCancel?: () => void;
   onDelete?: () => void;
@@ -33,6 +38,7 @@ function ProductDraftForm({
   initialItem,
   submitLabel,
   submitFormId,
+  formRef,
   onSubmit,
   onCancel,
   onDelete,
@@ -53,7 +59,9 @@ function ProductDraftForm({
   const [isSoldOut, setIsSoldOut] = useState(initialItem?.isSoldOut ?? false);
   const [selectedFile, setSelectedFile] = useState<File>();
   const [previewUrl, setPreviewUrl] = useState(initialItem?.imageUrl ?? '');
+  const [pendingImage, setPendingImage] = useState<{ file: File; imageUrl: string }>();
   const previewRef = useRef<string | null>(null);
+  const pendingImageUrlRef = useRef<string | null>(null);
   const transferredPreviewRef = useRef(false);
   const idPrefix = initialItem ? 'edit-product' : 'new-product';
 
@@ -61,18 +69,36 @@ function ProductDraftForm({
     if (previewRef.current && !transferredPreviewRef.current) {
       URL.revokeObjectURL(previewRef.current);
     }
+    if (pendingImageUrlRef.current) URL.revokeObjectURL(pendingImageUrlRef.current);
   }, []);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    input.value = '';
     if (!file) return;
 
+    const imageUrl = URL.createObjectURL(file);
+    pendingImageUrlRef.current = imageUrl;
+    setPendingImage({ file, imageUrl });
+  };
+
+  const handleCropApply = (file: File) => {
+    if (pendingImageUrlRef.current) URL.revokeObjectURL(pendingImageUrlRef.current);
+    pendingImageUrlRef.current = null;
     if (previewRef.current) URL.revokeObjectURL(previewRef.current);
     const nextPreviewUrl = URL.createObjectURL(file);
     previewRef.current = nextPreviewUrl;
     transferredPreviewRef.current = false;
     setSelectedFile(file);
     setPreviewUrl(nextPreviewUrl);
+    setPendingImage(undefined);
+  };
+
+  const handleCropCancel = () => {
+    if (pendingImageUrlRef.current) URL.revokeObjectURL(pendingImageUrlRef.current);
+    pendingImageUrlRef.current = null;
+    setPendingImage(undefined);
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -102,7 +128,8 @@ function ProductDraftForm({
   };
 
   return (
-    <form id={submitFormId} onSubmit={handleSubmit} className="space-y-4">
+    <>
+      <form id={submitFormId} ref={formRef} onSubmit={handleSubmit} className="space-y-4">
       <div>
         <label htmlFor={`${idPrefix}-name`} className="mb-1 block text-sm font-semibold text-stone-800">
           상품명
@@ -194,7 +221,7 @@ function ProductDraftForm({
         <img
           src={previewUrl || defaultProductImage}
           alt="상품 사진 미리보기"
-          className="mt-3 h-40 w-full rounded-lg bg-surface-muted object-cover"
+          className="mt-3 aspect-square w-full rounded-lg bg-surface-muted object-contain"
         />
         {selectedFile && <p className="mt-1 truncate text-xs text-stone-500">{selectedFile.name} · 저장 시 업로드</p>}
       </div>
@@ -248,7 +275,16 @@ function ProductDraftForm({
           상품 삭제
         </button>
       )}
-    </form>
+      </form>
+      {pendingImage && (
+        <ImageCropModal
+          file={pendingImage.file}
+          imageUrl={pendingImage.imageUrl}
+          onCancel={handleCropCancel}
+          onApply={handleCropApply}
+        />
+      )}
+    </>
   );
 }
 
@@ -275,6 +311,7 @@ export default function AdminPage() {
   const [kakaoChatUrlDraft, setKakaoChatUrlDraft] = useState('');
   const [orderGuideTextDraft, setOrderGuideTextDraft] = useState('');
   const [toast, setToast] = useState<ToastState>(null);
+  const registerFormRef = useRef<HTMLFormElement>(null);
   const previewUrlsRef = useRef<Record<string, string>>({});
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const menuPopupRef = useRef<HTMLElement>(null);
@@ -353,16 +390,22 @@ export default function AdminPage() {
     }
   };
 
-  const handleNoticeApply = (event: FormEvent<HTMLFormElement>) => {
+  const handleNoticeApply = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    updateDraftSettings({
+    const settings = {
       notice: noticeDraft,
       closedTitle: closedTitleDraft,
       kakaoChatUrl: kakaoChatUrlDraft.trim(),
       orderGuideText: orderGuideTextDraft,
-    });
+    };
+    if (isDraftMode) {
+      updateDraftSettings(settings);
+      setToast({ message: '공지사항 설정을 초안에 반영했습니다.', type: 'success' });
+    } else {
+      const saved = await runImmediateMutation((current) => ({ ...current, ...settings }));
+      if (!saved) return;
+    }
     setIsEditingNotice(false);
-    setToast({ message: '공지사항을 초안에 반영했습니다.', type: 'success' });
   };
 
   const handleNoticeEdit = () => {
@@ -569,7 +612,7 @@ export default function AdminPage() {
   };
 
   const handleDeleteProduct = (item: ProductItem) => {
-    if (!window.confirm(`'${item.name}' 상품을 초안에서 삭제할까요?`)) return;
+    if (!window.confirm(`'${item.name}' 상품을 삭제할까요?`)) return;
     if (isDraftMode) {
       removeDraftItem(item.id);
       releasePreviewUrl(item.id);
@@ -1083,6 +1126,7 @@ export default function AdminPage() {
               categories={draftCategories}
               submitLabel="새 빵 등록"
               submitFormId="register-product-form"
+              formRef={registerFormRef}
               onSubmit={handleRegisterProduct}
             />
           </section>
@@ -1135,8 +1179,8 @@ export default function AdminPage() {
           <div className="mx-auto flex max-w-md flex-col gap-2">
             {activeTab === 'register' && (
               <button
-                type="submit"
-                form="register-product-form"
+                type="button"
+                onClick={() => registerFormRef.current?.requestSubmit()}
                 className="inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-brand-primary px-3 font-bold text-white active:bg-brand-primary-dark"
               >
                 새 빵 등록

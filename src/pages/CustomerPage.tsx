@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useStoreData } from '../hooks/useStoreData';
 import { STORE_CONFIG } from '../config/storeConfig';
 import defaultProductImage from '../assets/defaultimg.webp';
-import { Bell, ChevronDown, MessageCircle, RotateCcw, Search, X } from 'lucide-react';
+import { Bell, Check, ChevronDown, Copy, MessageCircle, RotateCcw, Search, X } from 'lucide-react';
 
 function formatUpdatedAt(value: string) {
   const updatedAt = new Date(value);
@@ -46,9 +46,33 @@ export default function CustomerPage() {
   const [isNoticeScrollable, setIsNoticeScrollable] = useState(false);
   const [isNoticeAtBottom, setIsNoticeAtBottom] = useState(false);
   const [isOrderSheetOpen, setIsOrderSheetOpen] = useState(false);
+  const [isOrderGuideCopied, setIsOrderGuideCopied] = useState(false);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('전체');
   const [searchQuery, setSearchQuery] = useState('');
   const noticeContentRef = useRef<HTMLSpanElement>(null);
+
+  const copyOrderGuide = async () => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(customerData.orderGuideText);
+      } else {
+        const temporaryInput = document.createElement('textarea');
+        temporaryInput.value = customerData.orderGuideText;
+        temporaryInput.style.position = 'fixed';
+        temporaryInput.style.opacity = '0';
+        document.body.appendChild(temporaryInput);
+        temporaryInput.select();
+        const copied = document.execCommand('copy');
+        temporaryInput.remove();
+        if (!copied) throw new Error('Clipboard copy was rejected');
+      }
+      setIsOrderGuideCopied(true);
+      window.setTimeout(() => setIsOrderGuideCopied(false), 1800);
+    } catch {
+      setIsOrderGuideCopied(false);
+    }
+  };
 
   useEffect(() => {
     const content = noticeContentRef.current;
@@ -111,6 +135,9 @@ export default function CustomerPage() {
       const stockOrder = Number(aIsSoldOut) - Number(bIsSoldOut);
       return stockOrder || a.order - b.order;
     });
+  const selectedProduct = selectedProductId
+    ? visibleItems.find((item) => item.id === selectedProductId)
+    : undefined;
 
   return (
     <div className="mx-auto min-h-screen max-w-md bg-surface-page pb-8 text-stone-900 shadow-sm">
@@ -258,6 +285,16 @@ export default function CustomerPage() {
                   return (
                     <li
                       key={item.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${item.name} 상세 정보 보기`}
+                      onClick={() => setSelectedProductId(item.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          setSelectedProductId(item.id);
+                        }
+                      }}
                       className={`flex min-h-28 items-center gap-3.5 rounded-xl border border-border-subtle bg-surface-card p-3.5 ${isSoldOut ? 'opacity-60' : ''}`}
                     >
                       <div className={`relative h-18 w-18 shrink-0 overflow-hidden rounded-lg ${isSoldOut ? 'grayscale' : ''}`}>
@@ -304,6 +341,56 @@ export default function CustomerPage() {
         <p className="text-xs text-stone-500">{STORE_CONFIG.footerNotice}</p>
         <p className="mt-1 text-[11px] text-stone-400">{STORE_CONFIG.inAppBrowserNotice}</p>
       </footer>
+      {selectedProduct && (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setSelectedProductId(null);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="product-detail-title"
+            className="flex max-h-[85dvh] w-full max-w-md flex-col overflow-hidden rounded-xl bg-surface-card shadow-xl"
+          >
+            <header className="sticky top-0 z-10 flex min-h-14 shrink-0 items-center justify-between border-b border-border-subtle bg-surface-card px-4">
+              <h2 id="product-detail-title" className="truncate pr-3 text-lg font-bold text-brand-primary">
+                {selectedProduct.name}
+              </h2>
+              <button
+                type="button"
+                aria-label="상품 상세 닫기"
+                onClick={() => setSelectedProductId(null)}
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-stone-600 active:bg-surface-muted"
+              >
+                <X size={20} aria-hidden="true" />
+              </button>
+            </header>
+            <div className="min-h-0 overflow-y-auto">
+              <img
+                src={selectedProduct.imageUrl || defaultProductImage}
+                alt={selectedProduct.name}
+                className="aspect-square w-full object-contain"
+              />
+              <div className="space-y-3 p-5">
+                <span className="inline-flex rounded-lg bg-surface-muted px-2.5 py-1 text-xs font-semibold text-stone-600">
+                  {selectedProduct.category}
+                </span>
+                <h3 className="text-xl font-bold text-stone-900">{selectedProduct.name}</h3>
+                <p className="text-lg font-semibold text-stone-800">
+                  {selectedProduct.price.toLocaleString('ko-KR')}원
+                </p>
+                {selectedProduct.isSoldOut === true || selectedProduct.stock === 0 ? (
+                  <p className="text-sm font-bold text-status-soldout">품절</p>
+                ) : (
+                  <p className="text-sm text-stone-600">남은 수량 {selectedProduct.stock}개</p>
+                )}
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
       {customerData.kakaoChatUrl.trim() && (
         <button
           type="button"
@@ -325,7 +412,7 @@ export default function CustomerPage() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="order-sheet-title"
-            className="w-full max-w-md rounded-t-2xl bg-surface-card p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-xl sm:rounded-2xl"
+            className="flex max-h-[68dvh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl bg-surface-card p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-xl sm:rounded-2xl"
           >
             <div className="mb-4 flex items-center justify-between">
               <h2 id="order-sheet-title" className="text-lg font-bold text-brand-primary">카카오톡 주문/문의</h2>
@@ -338,9 +425,17 @@ export default function CustomerPage() {
                 <X size={20} aria-hidden="true" />
               </button>
             </div>
-            <div className="mb-5 min-h-20 whitespace-pre-line rounded-xl border border-border-subtle bg-surface-muted p-4 text-sm leading-6 text-stone-700">
+            <div className="mb-3 min-h-20 max-h-[34dvh] shrink overflow-y-auto whitespace-pre-line rounded-xl border border-border-subtle bg-surface-muted p-4 text-sm leading-6 text-stone-700">
               {customerData.orderGuideText}
             </div>
+            <button
+              type="button"
+              onClick={() => void copyOrderGuide()}
+              className="mb-3 flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-border-subtle bg-surface-card px-4 text-sm font-semibold text-brand-primary active:bg-surface-muted"
+            >
+              {isOrderGuideCopied ? <Check size={18} aria-hidden="true" /> : <Copy size={18} aria-hidden="true" />}
+              {isOrderGuideCopied ? '복사했습니다' : '주문 양식 복사하기'}
+            </button>
             <a
               href={customerData.kakaoChatUrl}
               target="_blank"
