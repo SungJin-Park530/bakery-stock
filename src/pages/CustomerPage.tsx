@@ -57,8 +57,10 @@ export default function CustomerPage({ isEducationFontEnabled, onEducationFontCh
   const [searchQuery, setSearchQuery] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const noticeContentRef = useRef<HTMLSpanElement>(null);
+  const catalogHeaderRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const menuPopupRef = useRef<HTMLElement>(null);
+  const [isCompactHeaderVisible, setIsCompactHeaderVisible] = useState(false);
 
   const copyOrderGuide = async () => {
     try {
@@ -126,6 +128,21 @@ export default function CustomerPage({ isEducationFontEnabled, onEducationFontCh
     };
   }, [customerData.notice, isNoticeExpanded]);
 
+  useEffect(() => {
+    const updateCompactHeader = () => {
+      const catalogTop = catalogHeaderRef.current?.getBoundingClientRect().top;
+      setIsCompactHeaderVisible(catalogTop !== undefined && catalogTop <= 0);
+    };
+
+    window.addEventListener('scroll', updateCompactHeader, { passive: true });
+    window.addEventListener('resize', updateCompactHeader);
+    updateCompactHeader();
+    return () => {
+      window.removeEventListener('scroll', updateCompactHeader);
+      window.removeEventListener('resize', updateCompactHeader);
+    };
+  }, []);
+
   if (loading) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-surface-page text-brand-primary">
@@ -170,7 +187,7 @@ export default function CustomerPage({ isEducationFontEnabled, onEducationFontCh
 
   return (
     <div className="mx-auto min-h-screen max-w-md bg-surface-page pb-8 text-stone-900 shadow-sm">
-      <header className="sticky top-0 z-20 bg-surface-header text-brand-primary shadow-sm">
+      <header className="bg-surface-header text-brand-primary shadow-sm">
         <div className="px-5 pb-5 pt-5">
           <div className="relative flex items-center justify-between gap-3">
             <p className="rounded-md bg-brand-accent px-3 py-1.5 text-sm font-bold text-white">
@@ -267,8 +284,15 @@ export default function CustomerPage({ isEducationFontEnabled, onEducationFontCh
           )}
         </div>
 
-        {isOpen && (
-          <>
+      </header>
+
+      {isOpen && (
+        <div ref={catalogHeaderRef} className="sticky top-0 z-20 bg-surface-header shadow-sm">
+          {isCompactHeaderVisible && (
+            <div className="border-b border-border-subtle px-5 py-3 text-brand-primary">
+              <h2 className="truncate text-lg font-bold">{STORE_CONFIG.storeName}</h2>
+            </div>
+          )}
             <nav
               aria-label="상품 카테고리"
               className="flex gap-5 overflow-x-auto whitespace-nowrap border-b border-border-subtle bg-surface-card px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -303,9 +327,8 @@ export default function CustomerPage({ isEducationFontEnabled, onEducationFontCh
                 />
               </label>
             </div>
-          </>
-        )}
-      </header>
+        </div>
+      )}
 
       <main className="px-4 pt-5">
         {!isOpen ? (
