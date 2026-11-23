@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStoreData } from '../hooks/useStoreData';
 import { STORE_CONFIG } from '../config/storeConfig';
+import { logCustomerEvent, setCustomerAnalyticsEnabled } from '../lib/firebase';
 import defaultProductImage from '../assets/defaultimg.webp';
 import { Bell, Check, ChevronDown, Copy, Menu, MessageCircle, RotateCcw, Search, X } from 'lucide-react';
 
@@ -61,6 +62,12 @@ export default function CustomerPage({ isEducationFontEnabled, onEducationFontCh
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const menuPopupRef = useRef<HTMLElement>(null);
   const [isCompactHeaderVisible, setIsCompactHeaderVisible] = useState(false);
+
+  useEffect(() => {
+    void setCustomerAnalyticsEnabled(true);
+    void logCustomerEvent('page_view', { page_title: '손님 메뉴판', page_path: '/' });
+    return () => { void setCustomerAnalyticsEnabled(false); };
+  }, []);
 
   const copyOrderGuide = async () => {
     try {
@@ -503,7 +510,10 @@ export default function CustomerPage({ isEducationFontEnabled, onEducationFontCh
       {customerData.kakaoChatUrl.trim() && (
         <button
           type="button"
-          onClick={() => setIsOrderSheetOpen(true)}
+          onClick={() => {
+            setIsOrderSheetOpen(true);
+            void logCustomerEvent('open_kakao_order_modal');
+          }}
           className="fixed bottom-6 right-5 z-30 inline-flex min-h-12 items-center gap-2 rounded-full bg-[#FEE500] px-4 text-sm font-bold text-stone-900 shadow-lg"
         >
           <MessageCircle size={19} aria-hidden="true" />
@@ -549,6 +559,7 @@ export default function CustomerPage({ isEducationFontEnabled, onEducationFontCh
               href={customerData.kakaoChatUrl}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => void logCustomerEvent('click_kakao_chat')}
               className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FEE500] px-4 text-sm font-bold text-stone-900"
             >
               <MessageCircle size={19} aria-hidden="true" />
