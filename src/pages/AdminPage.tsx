@@ -1,15 +1,20 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { Check, Eye, EyeOff, LoaderCircle, Menu, Save, Search, Trash2, X } from 'lucide-react';
+import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, Eye, EyeOff, GripVertical, LoaderCircle, Menu, Save, Search, Trash2, X } from 'lucide-react';
 import { STORE_CONFIG } from '../config/storeConfig';
 import defaultProductImage from '../assets/defaultimg.webp';
 import ImageCropModal from '../components/ImageCropModal';
 import { auth } from '../lib/firebaseAuth';
 import { useStoreData } from '../hooks/useStoreData';
+import { normalizeProductOrder, reorderCategoryItems } from '../lib/productOrdering';
 import type { ProductItem, StoreData } from '../types/bakery';
 
 type AdminTab = 'stock' | 'notice' | 'register';
 type ToastState = { message: string; type: 'success' | 'error' } | null;
+type OrderEditTarget = { type: 'product'; id: string } | { type: 'category'; category: string };
 type ProductFormValues = Omit<ProductItem, 'id' | 'imageUrl' | 'order'>;
 
 const NEW_CATEGORY_OPTION = '__new_category__';
@@ -18,6 +23,83 @@ const DRAFT_MODE_STORAGE_KEY = 'bakery-stock-admin-draft-mode';
 interface AdminPageProps {
   isEducationFontEnabled: boolean;
   onEducationFontChange: (enabled: boolean) => void;
+}
+
+interface SortableProductCardProps {
+  item: ProductItem;
+  isTargeted: boolean;
+  onSelect: () => void;
+}
+
+function SortableProductCard({ item, isTargeted, onSelect }: SortableProductCardProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `product:${item.id}` });
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.55 : 1 }}
+      className={`flex min-h-[68px] items-center gap-2 rounded-lg border px-2 ${isTargeted ? 'border-brand-primary bg-brand-primary/10 ring-1 ring-brand-primary' : 'border-border-subtle bg-surface-card'}`}
+    >
+      <button
+        type="button"
+        aria-pressed={isTargeted}
+        onClick={onSelect}
+        className="flex min-h-[64px] min-w-0 flex-1 items-center gap-3 px-1 text-left"
+      >
+        <img
+          src={item.imageUrl || defaultProductImage}
+          alt=""
+          className="h-11 w-11 shrink-0 rounded-md object-cover"
+        />
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-stone-900">{item.name}</span>
+      </button>
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        aria-label={`${item.name} 드래그하여 순서 변경`}
+        className="grid h-11 w-11 shrink-0 touch-none place-items-center rounded-md text-stone-500 active:bg-surface-muted"
+      >
+        <GripVertical size={21} aria-hidden="true" />
+      </button>
+    </li>
+  );
+}
+
+interface SortableCategoryCardProps {
+  category: string;
+  isTargeted: boolean;
+  onSelect: () => void;
+}
+
+function SortableCategoryCard({ category, isTargeted, onSelect }: SortableCategoryCardProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `category:${category}` });
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.55 : 1 }}
+      className={`flex min-h-14 items-center gap-2 rounded-lg border px-2 ${isTargeted ? 'border-brand-primary bg-brand-primary/10 ring-1 ring-brand-primary' : 'border-border-subtle bg-surface-card'}`}
+    >
+      <button
+        type="button"
+        aria-pressed={isTargeted}
+        onClick={onSelect}
+        className="flex min-h-12 min-w-0 flex-1 items-center px-2 text-left text-sm font-semibold text-stone-900"
+      >
+        {category}
+      </button>
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        aria-label={`${category} 드래그하여 순서 변경`}
+        className="grid h-11 w-11 shrink-0 touch-none place-items-center rounded-md text-stone-500 active:bg-surface-muted"
+      >
+        <GripVertical size={21} aria-hidden="true" />
+      </button>
+    </li>
+  );
 }
 
 function createProductId() {
@@ -308,6 +390,14 @@ export default function AdminPage({ isEducationFontEnabled, onEducationFontChang
   });
   const [selectedStockCategory, setSelectedStockCategory] = useState('전체');
   const [stockSearchQuery, setStockSearchQuery] = useState('');
+  const [isOrderEditMode, setIsOrderEditMode] = useState(false);
+  const [orderEditSection, setOrderEditSection] = useState<'products' | 'categories'>('products');
+  const [orderEditItems, setOrderEditItems] = useState<ProductItem[]>([]);
+  const [orderEditCategories, setOrderEditCategories] = useState<string[]>([]);
+  const [selectedOrderCategory, setSelectedOrderCategory] = useState('');
+  const [activeOrderTarget, setActiveOrderTarget] = useState<OrderEditTarget | null>(null);
+  const [orderMoveMessage, setOrderMoveMessage] = useState('');
+  const [isFinishingOrderEdit, setIsFinishingOrderEdit] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [registerFormVersion, setRegisterFormVersion] = useState(0);
   const [isEditingNotice, setIsEditingNotice] = useState(false);
@@ -321,6 +411,7 @@ export default function AdminPage({ isEducationFontEnabled, onEducationFontChang
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const menuPopupRef = useRef<HTMLElement>(null);
   const immediateMutationPromiseRef = useRef<Promise<void>>(Promise.resolve());
+  const orderSnapshotRef = useRef<{ itemIds: string[]; categories: string[] } | null>(null);
   const {
     draftData,
     hasChanges,
@@ -329,14 +420,21 @@ export default function AdminPage({ isEducationFontEnabled, onEducationFontChang
     updateDraftStock,
     toggleDraftSoldOut,
     updateDraftSettings,
+    updateCategoryOrder,
+    updateDraftOrdering,
     updateDraftItem,
     removeDraftItem,
     saveChanges,
     updateStoreImmediately,
+    saveOrderingImmediately,
     discardChanges,
     loadLatestServerData,
   } = useStoreData();
   const isOpen = draftData.isOpen !== false;
+  const orderEditSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, setUser);
@@ -369,6 +467,12 @@ export default function AdminPage({ isEducationFontEnabled, onEducationFontChang
     const timeoutId = window.setTimeout(() => setToast(null), 2800);
     return () => window.clearTimeout(timeoutId);
   }, [toast]);
+
+  useEffect(() => {
+    if (!orderMoveMessage) return;
+    const timeoutId = window.setTimeout(() => setOrderMoveMessage(''), 2200);
+    return () => window.clearTimeout(timeoutId);
+  }, [orderMoveMessage]);
 
   useEffect(() => () => {
     Object.values(previewUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
@@ -692,6 +796,9 @@ export default function AdminPage({ isEducationFontEnabled, onEducationFontChang
           .sort((a, b) => a.localeCompare(b, 'ko')),
       ]
     : draftCategories.sort((a, b) => a.localeCompare(b, 'ko'));
+  const editableCategories = orderedCategories.filter(
+    (category) => category !== '전체' && category !== '품절' && category !== '미노출'
+  );
   const stockCategories = ['전체', ...orderedCategories, '품절', '미노출'];
   const filteredStockItems = draftData.items
     .filter((item) => {
@@ -711,6 +818,195 @@ export default function AdminPage({ isEducationFontEnabled, onEducationFontChang
   const editingItem = selectedItemId
     ? draftData.items.find((item) => item.id === selectedItemId)
     : undefined;
+
+  const isOrderEditable = (item: ProductItem) =>
+    item.isVisible !== false && item.isSoldOut !== true && item.stock !== 0;
+  const selectedOrderItems = orderEditItems
+    .filter((item) => item.category === selectedOrderCategory && isOrderEditable(item))
+    .sort((left, right) => left.order - right.order);
+
+  const enterOrderEditMode = () => {
+    const sortedItems = draftData.items
+      .map((item, index) => ({ item, index }))
+      .sort((left, right) => {
+        const leftOrder = Number.isFinite(left.item.order) ? left.item.order : left.index;
+        const rightOrder = Number.isFinite(right.item.order) ? right.item.order : right.index;
+        return leftOrder - rightOrder || left.index - right.index;
+      })
+      .map(({ item }) => item);
+    const normalizedItems = normalizeProductOrder(sortedItems);
+    const categories = [...editableCategories];
+    orderSnapshotRef.current = {
+      itemIds: normalizedItems.map((item) => item.id),
+      categories,
+    };
+    setOrderEditItems(normalizedItems);
+    setOrderEditCategories(categories);
+    setSelectedOrderCategory(categories[0] ?? '');
+    setOrderEditSection('products');
+    setActiveOrderTarget(null);
+    setOrderMoveMessage('');
+    setIsOrderEditMode(true);
+  };
+
+  const finishOrderEditMode = async (nextTab?: AdminTab) => {
+    if (isFinishingOrderEdit || isSaving) return false;
+
+    const snapshot = orderSnapshotRef.current;
+    const nextItemIds = orderEditItems.map((item) => item.id);
+    const itemsChanged = Boolean(snapshot && (
+      snapshot.itemIds.length !== nextItemIds.length ||
+      snapshot.itemIds.some((id, index) => id !== nextItemIds[index])
+    ));
+    const categoriesChanged = Boolean(snapshot && (
+      snapshot.categories.length !== orderEditCategories.length ||
+      snapshot.categories.some((category, index) => category !== orderEditCategories[index])
+    ));
+
+    setIsFinishingOrderEdit(true);
+    try {
+      if (itemsChanged || categoriesChanged) {
+        if (isDraftMode) {
+          if (itemsChanged && categoriesChanged) {
+            updateDraftOrdering(orderEditItems, orderEditCategories);
+          } else if (itemsChanged) {
+            updateDraftOrdering(orderEditItems);
+          } else {
+            updateCategoryOrder(orderEditCategories);
+          }
+        } else {
+          await saveOrderingImmediately(
+            itemsChanged ? orderEditItems : undefined,
+            categoriesChanged ? orderEditCategories : undefined
+          );
+        }
+      }
+
+      orderSnapshotRef.current = null;
+      setIsOrderEditMode(false);
+      setActiveOrderTarget(null);
+      setOrderMoveMessage('');
+      if (nextTab) setActiveTab(nextTab);
+      return true;
+    } catch {
+      setToast({ message: '순서 변경 저장에 실패했습니다. 네트워크 연결을 확인해주세요.', type: 'error' });
+      return false;
+    } finally {
+      setIsFinishingOrderEdit(false);
+    }
+  };
+
+  const moveOrderTarget = (direction: -1 | 1) => {
+    if (!activeOrderTarget) {
+      setOrderMoveMessage('이동할 항목을 먼저 선택해주세요.');
+      return;
+    }
+
+    if (orderEditSection === 'products' && activeOrderTarget.type === 'product') {
+      const selectedItem = orderEditItems.find((item) => item.id === activeOrderTarget.id);
+      if (!selectedItem) {
+        setOrderMoveMessage('이동할 항목을 먼저 선택해주세요.');
+        return;
+      }
+      const categoryItems = orderEditItems
+        .filter((item) => item.category === selectedItem.category && isOrderEditable(item))
+        .sort((left, right) => left.order - right.order);
+      const currentIndex = categoryItems.findIndex((item) => item.id === selectedItem.id);
+      const nextIndex = currentIndex + direction;
+      if (nextIndex < 0 || nextIndex >= categoryItems.length) {
+        setOrderMoveMessage(direction < 0
+          ? '더 이상 위로 이동할 수 없습니다.'
+          : '더 이상 아래로 이동할 수 없습니다.');
+        return;
+      }
+
+      const nextCategoryItems = [...categoryItems];
+      [nextCategoryItems[currentIndex], nextCategoryItems[nextIndex]] = [nextCategoryItems[nextIndex], nextCategoryItems[currentIndex]];
+      setOrderEditItems(reorderCategoryItems(
+        orderEditItems,
+        selectedItem.category,
+        nextCategoryItems.map((item) => item.id)
+      ));
+      setOrderMoveMessage('');
+      return;
+    }
+
+    if (orderEditSection === 'categories' && activeOrderTarget.type === 'category') {
+      const currentIndex = orderEditCategories.indexOf(activeOrderTarget.category);
+      const nextIndex = currentIndex + direction;
+      if (currentIndex < 0) {
+        setOrderMoveMessage('이동할 항목을 먼저 선택해주세요.');
+        return;
+      }
+      if (nextIndex < 0 || nextIndex >= orderEditCategories.length) {
+        setOrderMoveMessage(direction < 0
+          ? '더 이상 위로 이동할 수 없습니다.'
+          : '더 이상 아래로 이동할 수 없습니다.');
+        return;
+      }
+
+      const nextCategories = [...orderEditCategories];
+      [nextCategories[currentIndex], nextCategories[nextIndex]] = [nextCategories[nextIndex], nextCategories[currentIndex]];
+      setOrderEditCategories(nextCategories);
+      setOrderMoveMessage('');
+      return;
+    }
+
+    setOrderMoveMessage('이동할 항목을 먼저 선택해주세요.');
+  };
+
+  const handleOrderDragStart = ({ active }: DragStartEvent) => {
+    const activeId = String(active.id);
+    if (activeId.startsWith('product:')) {
+      setActiveOrderTarget({ type: 'product', id: activeId.slice('product:'.length) });
+    } else if (activeId.startsWith('category:')) {
+      setActiveOrderTarget({ type: 'category', category: activeId.slice('category:'.length) });
+    }
+    setOrderMoveMessage('');
+  };
+
+  const handleOrderDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    if (orderEditSection === 'products' && activeId.startsWith('product:') && overId.startsWith('product:')) {
+      const activeProductId = activeId.slice('product:'.length);
+      const overProductId = overId.slice('product:'.length);
+      const oldIndex = selectedOrderItems.findIndex((item) => item.id === activeProductId);
+      const newIndex = selectedOrderItems.findIndex((item) => item.id === overProductId);
+      if (oldIndex < 0 || newIndex < 0) return;
+
+      const reorderedItems = arrayMove(selectedOrderItems, oldIndex, newIndex);
+      setOrderEditItems(reorderCategoryItems(
+        orderEditItems,
+        selectedOrderCategory,
+        reorderedItems.map((item) => item.id)
+      ));
+      setActiveOrderTarget({ type: 'product', id: activeProductId });
+      return;
+    }
+
+    if (orderEditSection === 'categories' && activeId.startsWith('category:') && overId.startsWith('category:')) {
+      const activeCategory = activeId.slice('category:'.length);
+      const overCategory = overId.slice('category:'.length);
+      const oldIndex = orderEditCategories.indexOf(activeCategory);
+      const newIndex = orderEditCategories.indexOf(overCategory);
+      if (oldIndex < 0 || newIndex < 0) return;
+
+      setOrderEditCategories(arrayMove(orderEditCategories, oldIndex, newIndex));
+      setActiveOrderTarget({ type: 'category', category: activeCategory });
+    }
+  };
+
+  const handleAdminTabSelect = (tab: AdminTab) => {
+    if (tab === activeTab) return;
+    if (isOrderEditMode) {
+      void finishOrderEditMode(tab);
+      return;
+    }
+    setActiveTab(tab);
+  };
 
   return (
     <div className="mx-auto min-h-screen max-w-md bg-surface-page pb-28 text-stone-900 shadow-sm">
@@ -802,7 +1098,7 @@ export default function AdminPage({ isEducationFontEnabled, onEducationFontChang
               key={tab.id}
               type="button"
               aria-current={activeTab === tab.id ? 'page' : undefined}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleAdminTabSelect(tab.id)}
                 className={`h-12 flex-1 border-b-2 px-2 text-sm ${
                 activeTab === tab.id
                   ? 'border-brand-secondary font-bold text-brand-secondary'
@@ -846,52 +1142,202 @@ export default function AdminPage({ isEducationFontEnabled, onEducationFontChang
             <div className="sticky top-28 z-20 -mx-4 space-y-3 bg-surface-page px-4 pb-3 pt-4">
               <div className="flex items-baseline justify-between">
                 <h2 id="stock-heading" className="text-lg font-bold text-stone-900">재고 관리</h2>
-                <span className="text-xs text-stone-500">{filteredStockItems.length}개 상품</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-stone-500">
+                    {isOrderEditMode
+                      ? orderEditSection === 'products'
+                        ? `${selectedOrderItems.length}개 상품`
+                        : `${orderEditCategories.length}개 탭`
+                      : `${filteredStockItems.length}개 상품`}
+                  </span>
+                  {isOrderEditMode ? (
+                    <button
+                      type="button"
+                      onClick={() => void finishOrderEditMode()}
+                      disabled={isFinishingOrderEdit || isSaving}
+                      className="min-h-10 rounded-lg bg-brand-primary px-4 text-sm font-bold text-white disabled:opacity-60"
+                    >
+                      완료
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      aria-label="순서 편집 모드 시작"
+                      title="순서 편집"
+                      onClick={enterOrderEditMode}
+                      className="grid h-10 w-10 place-items-center rounded-lg border border-border-subtle bg-surface-card text-brand-primary"
+                    >
+                      <ArrowUpDown size={20} aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <nav
-                aria-label="재고 카테고리 필터"
-                className="-mx-4 flex gap-2 overflow-x-auto whitespace-nowrap px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              >
-                {stockCategories.map((category) => (
-                  <button
-                    key={category}
-                    type="button"
-                    aria-pressed={selectedStockCategory === category}
-                    onClick={() => setSelectedStockCategory(category)}
-                    className={`min-h-11 shrink-0 rounded-lg border px-4 text-sm font-semibold ${
-                      category === '품절'
-                        ? selectedStockCategory === category
-                          ? 'border-status-danger bg-status-danger text-white'
-                          : 'border-status-danger bg-surface-card text-status-danger'
-                        : category === '미노출'
-                          ? selectedStockCategory === category
-                            ? 'border-brand-secondary bg-brand-secondary text-white'
-                            : 'border-stone-400 bg-surface-card text-stone-700'
-                          : selectedStockCategory === category
-                            ? 'border-brand-secondary bg-brand-secondary text-white'
-                            : 'border-border-subtle bg-surface-card text-stone-700'
-                    }`}
+              {isOrderEditMode ? (
+                <>
+                  <div role="group" aria-label="순서 편집 대상" className="grid grid-cols-2 rounded-lg border border-border-subtle bg-surface-muted p-1">
+                    <button
+                      type="button"
+                      aria-pressed={orderEditSection === 'products'}
+                      onClick={() => {
+                        setOrderEditSection('products');
+                        setActiveOrderTarget(null);
+                        setOrderMoveMessage('');
+                      }}
+                      className={`min-h-10 rounded-md text-sm font-semibold ${orderEditSection === 'products' ? 'bg-surface-card text-brand-primary shadow-sm' : 'text-stone-600'}`}
+                    >
+                      상품 순서
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={orderEditSection === 'categories'}
+                      onClick={() => {
+                        setOrderEditSection('categories');
+                        setActiveOrderTarget(null);
+                        setOrderMoveMessage('');
+                      }}
+                      className={`min-h-10 rounded-md text-sm font-semibold ${orderEditSection === 'categories' ? 'bg-surface-card text-brand-primary shadow-sm' : 'text-stone-600'}`}
+                    >
+                      탭 순서
+                    </button>
+                  </div>
+                  {orderEditSection === 'products' && (
+                    <nav
+                      aria-label="상품 순서 편집 카테고리"
+                      className="-mx-4 flex gap-2 overflow-x-auto whitespace-nowrap px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                    >
+                      {orderEditCategories.map((category) => (
+                        <button
+                          key={category}
+                          type="button"
+                          aria-pressed={selectedOrderCategory === category}
+                          onClick={() => {
+                            setSelectedOrderCategory(category);
+                            setActiveOrderTarget(null);
+                            setOrderMoveMessage('');
+                          }}
+                          className={`min-h-10 shrink-0 rounded-full border px-4 text-sm font-semibold ${selectedOrderCategory === category ? 'border-brand-secondary bg-brand-secondary text-white' : 'border-border-subtle bg-surface-card text-stone-700'}`}
+                        >
+                          {category}
+                        </button>
+                      ))}
+                    </nav>
+                  )}
+                </>
+              ) : (
+                <>
+                  <nav
+                    aria-label="재고 카테고리 필터"
+                    className="-mx-4 flex gap-2 overflow-x-auto whitespace-nowrap px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                   >
-                    {category}
-                  </button>
-                ))}
-              </nav>
+                    {stockCategories.map((category) => (
+                      <button
+                        key={category}
+                        type="button"
+                        aria-pressed={selectedStockCategory === category}
+                        onClick={() => setSelectedStockCategory(category)}
+                        className={`min-h-11 shrink-0 rounded-lg border px-4 text-sm font-semibold ${
+                          category === '품절'
+                            ? selectedStockCategory === category
+                              ? 'border-status-danger bg-status-danger text-white'
+                              : 'border-status-danger bg-surface-card text-status-danger'
+                            : category === '미노출'
+                              ? selectedStockCategory === category
+                                ? 'border-brand-secondary bg-brand-secondary text-white'
+                                : 'border-stone-400 bg-surface-card text-stone-700'
+                              : selectedStockCategory === category
+                                ? 'border-brand-secondary bg-brand-secondary text-white'
+                                : 'border-border-subtle bg-surface-card text-stone-700'
+                        }`}
+                      >
+                        {category}
+                      </button>
+                    ))}
+                  </nav>
 
-              <label className="flex min-h-12 items-center gap-2 rounded-xl border border-border-subtle bg-surface-card px-3.5 focus-within:border-brand-primary focus-within:ring-1 focus-within:ring-brand-primary">
-                <Search size={18} className="shrink-0 text-stone-500" aria-hidden="true" />
-                <input
-                  type="search"
-                  value={stockSearchQuery}
-                  onChange={(event) => setStockSearchQuery(event.target.value)}
-                  placeholder="상품명 빠른 검색"
-                  aria-label="상품명 검색"
-                  className="min-w-0 flex-1 bg-transparent text-sm text-stone-900 outline-none placeholder:text-stone-400"
-                />
-              </label>
+                  <label className="flex min-h-12 items-center gap-2 rounded-xl border border-border-subtle bg-surface-card px-3.5 focus-within:border-brand-primary focus-within:ring-1 focus-within:ring-brand-primary">
+                    <Search size={18} className="shrink-0 text-stone-500" aria-hidden="true" />
+                    <input
+                      type="search"
+                      value={stockSearchQuery}
+                      onChange={(event) => setStockSearchQuery(event.target.value)}
+                      placeholder="상품명 빠른 검색"
+                      aria-label="상품명 검색"
+                      className="min-w-0 flex-1 bg-transparent text-sm text-stone-900 outline-none placeholder:text-stone-400"
+                    />
+                  </label>
+                </>
+              )}
             </div>
 
-            {filteredStockItems.length === 0 ? (
+            {isOrderEditMode ? (
+              orderEditSection === 'products' ? (
+                selectedOrderItems.length === 0 ? (
+                  <p className="rounded-lg border border-border-subtle bg-surface-card px-4 py-10 text-center text-sm text-stone-500">
+                    선택한 카테고리에 순서를 편집할 상품이 없습니다.
+                  </p>
+                ) : (
+                  <div className="space-y-5">
+                    <p className="text-xs text-stone-500">품절 및 미노출 상품은 순서 변경 대상에서 제외됩니다.</p>
+                    <DndContext
+                      sensors={orderEditSensors}
+                      collisionDetection={closestCenter}
+                      onDragStart={handleOrderDragStart}
+                      onDragEnd={handleOrderDragEnd}
+                    >
+                      <SortableContext
+                        items={selectedOrderItems.map((item) => `product:${item.id}`)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <ul className="space-y-2">
+                          {selectedOrderItems.map((item) => (
+                            <SortableProductCard
+                              key={item.id}
+                              item={item}
+                              isTargeted={activeOrderTarget?.type === 'product' && activeOrderTarget.id === item.id}
+                              onSelect={() => {
+                                setActiveOrderTarget({ type: 'product', id: item.id });
+                                setOrderMoveMessage('');
+                              }}
+                            />
+                          ))}
+                        </ul>
+                      </SortableContext>
+                    </DndContext>
+                  </div>
+                )
+              ) : orderEditCategories.length === 0 ? (
+                <p className="rounded-lg border border-border-subtle bg-surface-card px-4 py-10 text-center text-sm text-stone-500">
+                  순서를 편집할 카테고리 탭이 없습니다.
+                </p>
+              ) : (
+                <DndContext
+                  sensors={orderEditSensors}
+                  collisionDetection={closestCenter}
+                  onDragStart={handleOrderDragStart}
+                  onDragEnd={handleOrderDragEnd}
+                >
+                  <SortableContext
+                    items={orderEditCategories.map((category) => `category:${category}`)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <ul className="space-y-2">
+                      {orderEditCategories.map((category) => (
+                        <SortableCategoryCard
+                          key={category}
+                          category={category}
+                          isTargeted={activeOrderTarget?.type === 'category' && activeOrderTarget.category === category}
+                          onSelect={() => {
+                            setActiveOrderTarget({ type: 'category', category });
+                            setOrderMoveMessage('');
+                          }}
+                        />
+                      ))}
+                    </ul>
+                  </SortableContext>
+                </DndContext>
+              )
+            ) : filteredStockItems.length === 0 ? (
                 <p className="rounded-xl border border-border-subtle bg-surface-card px-4 py-10 text-center text-sm text-stone-500">
                 조건에 맞는 상품이 없습니다.
               </p>
@@ -1200,7 +1646,39 @@ export default function AdminPage({ isEducationFontEnabled, onEducationFontChang
         </div>
       )}
 
-      {(activeTab === 'register' || hasChanges) && (
+      {isOrderEditMode && (
+        <footer className="fixed bottom-0 left-0 right-0 z-30 border-t border-border-subtle bg-surface-card px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-lg">
+          <div className="mx-auto flex max-w-md flex-col gap-2">
+            {orderMoveMessage && (
+              <p role="status" aria-live="polite" className="text-center text-sm font-medium text-status-danger">
+                {orderMoveMessage}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => moveOrderTarget(-1)}
+                disabled={isFinishingOrderEdit || isSaving}
+                className="inline-flex min-h-14 flex-1 items-center justify-center gap-2 rounded-lg border border-border-subtle bg-surface-card text-base font-bold text-brand-primary disabled:opacity-50"
+              >
+                <ArrowUp size={20} aria-hidden="true" />
+                위로 이동
+              </button>
+              <button
+                type="button"
+                onClick={() => moveOrderTarget(1)}
+                disabled={isFinishingOrderEdit || isSaving}
+                className="inline-flex min-h-14 flex-1 items-center justify-center gap-2 rounded-lg bg-brand-primary text-base font-bold text-white disabled:opacity-50"
+              >
+                <ArrowDown size={20} aria-hidden="true" />
+                아래로 이동
+              </button>
+            </div>
+          </div>
+        </footer>
+      )}
+
+      {!isOrderEditMode && (activeTab === 'register' || hasChanges) && (
         <footer className="fixed bottom-0 left-0 right-0 z-30 border-t border-border-subtle bg-surface-card px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-lg">
           <div className="mx-auto flex max-w-md flex-col gap-2">
             {activeTab === 'register' && (

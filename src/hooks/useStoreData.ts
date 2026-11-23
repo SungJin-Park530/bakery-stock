@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { onSnapshot, runTransaction, setDoc } from 'firebase/firestore';
 import { db, MENU_DOC_REF } from '../lib/firebase';
 import type { ProductItem, StoreData } from '../types/bakery';
+import { normalizeProductOrder, reorderCategoryItems } from '../lib/productOrdering';
 
 function createDefaultStoreData(): StoreData {
   return {
@@ -159,6 +160,25 @@ export function useStoreData() {
 
   const updateDraftSettings = useCallback((settings: Partial<Pick<StoreData, 'notice' | 'closedTitle' | 'kakaoChatUrl' | 'orderGuideText'>>) => {
     commitDraft({ ...draftDataRef.current, ...settings });
+  }, [commitDraft]);
+
+  const updateCategoryOrder = useCallback((categories: string[]) => {
+    commitDraft({ ...draftDataRef.current, categories: [...categories] });
+  }, [commitDraft]);
+
+  const updateCategoryProductOrder = useCallback((category: string, orderedItemIds: string[]) => {
+    commitDraft({
+      ...draftDataRef.current,
+      items: reorderCategoryItems(draftDataRef.current.items, category, orderedItemIds),
+    });
+  }, [commitDraft]);
+
+  const updateDraftOrdering = useCallback((items: ProductItem[], categories?: string[]) => {
+    commitDraft({
+      ...draftDataRef.current,
+      items: normalizeProductOrder(items),
+      ...(categories ? { categories: [...categories] } : {}),
+    });
   }, [commitDraft]);
 
   const toggleDraftOpen = useCallback(() => {
@@ -330,6 +350,30 @@ export function useStoreData() {
     }
   }, []);
 
+  const saveOrderingImmediately = useCallback(async (items?: ProductItem[], categories?: string[]) => {
+    const orderedIds = items
+      ? new Map(items.map((item, index) => [item.id, index]))
+      : null;
+    await updateStoreImmediately((current) => {
+      const currentItems = orderedIds
+        ? current.items
+            .map((item, index) => ({ item, index }))
+            .sort((left, right) => {
+              const leftOrder = orderedIds.get(left.item.id) ?? Number.MAX_SAFE_INTEGER;
+              const rightOrder = orderedIds.get(right.item.id) ?? Number.MAX_SAFE_INTEGER;
+              return leftOrder - rightOrder || left.index - right.index;
+            })
+            .map(({ item }) => item)
+        : undefined;
+
+      return {
+        ...current,
+        ...(categories ? { categories: [...categories] } : {}),
+        ...(currentItems ? { items: normalizeProductOrder(currentItems) } : {}),
+      };
+    });
+  }, [updateStoreImmediately]);
+
   const discardChanges = useCallback(() => {
     const currentServerData = serverDataRef.current;
     draftDataRef.current = currentServerData;
@@ -367,10 +411,14 @@ export function useStoreData() {
     toggleDraftOpen,
     updateDraftNotice,
     updateDraftSettings,
+    updateCategoryOrder,
+    updateCategoryProductOrder,
+    updateDraftOrdering,
     updateDraftItem,
     removeDraftItem,
     saveChanges,
     updateStoreImmediately,
+    saveOrderingImmediately,
     discardChanges,
     loadLatestServerData: discardChanges,
     storeData: draftData,
