@@ -179,10 +179,16 @@ export default function CustomerPage({ isEducationFontEnabled, onEducationFontCh
       ]
     : availableCategories.sort((a, b) => a.localeCompare(b, 'ko'));
   const categories = ['전체', ...orderedCategories];
+  const categoryPositions = new Map(orderedCategories.map((category, index) => [category, index]));
   const filteredItems = [...visibleItems]
     .filter((item) => selectedCategory === '전체' || item.category === selectedCategory)
     .filter((item) => item.name.toLocaleLowerCase('ko').includes(searchQuery.trim().toLocaleLowerCase('ko')))
     .sort((a, b) => {
+      if (selectedCategory === '전체') {
+        const categoryOrder = (categoryPositions.get(a.category) ?? orderedCategories.length)
+          - (categoryPositions.get(b.category) ?? orderedCategories.length);
+        if (categoryOrder !== 0) return categoryOrder;
+      }
       const aIsSoldOut = a.isSoldOut === true || a.stock === 0;
       const bIsSoldOut = b.isSoldOut === true || b.stock === 0;
       const stockOrder = Number(aIsSoldOut) - Number(bIsSoldOut);
