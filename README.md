@@ -1,18 +1,28 @@
+# 리리빵집 재고알리미
+
 <div align="center">
     <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&amp;logoColor=white" alt="React 19" />
     <img src="https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&amp;logoColor=white" alt="TypeScript" />
     <img src="https://img.shields.io/badge/Vite-8-646CFF?logo=vite&amp;logoColor=white" alt="Vite" />
     <img src="https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4?logo=tailwindcss&amp;logoColor=white" alt="Tailwind CSS v4" />
+    </br>
     <img src="https://img.shields.io/badge/Firebase-Firestore_and_Auth-FFCA28?logo=firebase&amp;logoColor=black" alt="Firebase Firestore and Authentication" />
     <img src="https://img.shields.io/badge/Google_Analytics-GA4-E37400?logo=googleanalytics&amp;logoColor=white" alt="Google Analytics 4" />
     <img src="https://img.shields.io/badge/Cloudinary-Image_Hosting-3448C5?logo=cloudinary&amp;logoColor=white" alt="Cloudinary" />
     <img src="https://img.shields.io/badge/GitHub_Pages-Deploy-222222?logo=githubpages&amp;logoColor=white" alt="GitHub Pages" />
     </br>
     </br>
+    <h3>빵집의 당일 상품과 재고를 손님에게 실시간으로 안내하는 모바일 웹 애플리케이션입니다.</h3>
 </div>
 
-# 리리빵집 재고알리미
-빵집의 당일 상품과 재고를 손님에게 실시간으로 안내하는 모바일 웹 애플리케이션입니다.
+## 누가 개발했나요?
+
+<table>
+  <tr>
+    <td><a href="https://sungjin-park530.github.io/web_portfolio/"><img src = "https://res.cloudinary.com/vrp8ghjs/image/upload/v1795673336/doc.png"></a></td>
+    <td>저 '박성진'이 기획부터 개발까지 모두 담당했습니다. </br> 좌측 이미지를 클릭하시면 <b>포트폴리오 페이지</b>로 이동합니다! </td>
+  </tr>
+</table>
 
 ## 목차
 - [운영 요약](#운영-요약)
