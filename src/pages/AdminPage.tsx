@@ -814,7 +814,13 @@ export default function AdminPage({ isEducationFontEnabled, onEducationFontChang
       const matchesSearch = item.name.toLocaleLowerCase('ko').includes(stockSearchQuery.trim().toLocaleLowerCase('ko'));
       return matchesCategory && matchesVisibility && matchesSearch;
     })
-    .sort((a, b) => a.order - b.order);
+    .sort((a, b) => {
+      if (selectedStockCategory === '전체') {
+        const categoryOrder = orderedCategories.indexOf(a.category) - orderedCategories.indexOf(b.category);
+        if (categoryOrder !== 0) return categoryOrder;
+      }
+      return a.order - b.order;
+    });
   const editingItem = selectedItemId
     ? draftData.items.find((item) => item.id === selectedItemId)
     : undefined;
