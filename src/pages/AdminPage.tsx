@@ -1016,6 +1016,24 @@ export default function AdminPage({ isEducationFontEnabled, onEducationFontChang
 
   return (
     <div className="mx-auto min-h-screen max-w-md bg-surface-page pb-28 text-stone-900 shadow-sm">
+      {!isOpen && (
+        <div className="pointer-events-none fixed inset-0 z-50 shadow-[inset_0_0_0_10px_rgba(220,38,38,0.32)]">
+          <div
+            className={`pointer-events-none fixed left-1/2 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full bg-red-600/90 px-3.5 py-1.5 text-xs font-semibold text-white shadow-md ${
+              isOrderEditMode
+                ? orderMoveMessage ? 'bottom-[calc(8rem+env(safe-area-inset-bottom))]' : 'bottom-[calc(6rem+env(safe-area-inset-bottom))]'
+                : activeTab === 'register' && hasChanges
+                  ? 'bottom-[calc(9rem+env(safe-area-inset-bottom))]'
+                  : activeTab === 'register' || hasChanges
+                    ? 'bottom-[calc(6rem+env(safe-area-inset-bottom))]'
+                    : 'bottom-6'
+            }`}
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-white" />
+            현재 가게 휴무 중
+          </div>
+        </div>
+      )}
       <div className="sticky top-0 z-40 shadow-sm">
         <header className="relative flex h-16 items-center justify-between bg-surface-header px-4 text-brand-primary">
           <div className="flex min-w-0 items-center gap-2.5">
